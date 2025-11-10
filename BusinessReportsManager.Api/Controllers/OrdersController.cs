@@ -1,9 +1,9 @@
 using BusinessReportsManager.Application.Common;
 using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using BusinessReportsManager.Application.AbstractServices;
 using Swashbuckle.AspNetCore.Annotations;
 using Swashbuckle.AspNetCore.Filters;
 

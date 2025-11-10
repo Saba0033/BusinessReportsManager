@@ -1,7 +1,7 @@
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Interfaces;
 using BusinessReportsManager.Infrastructure.DataAccess;

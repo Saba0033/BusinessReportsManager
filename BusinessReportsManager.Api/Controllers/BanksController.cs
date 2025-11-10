@@ -1,5 +1,5 @@
+using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,14 +14,15 @@ public class BanksController : ControllerBase
 
     public BanksController(IBankService service) => _service = service;
 
-    [HttpGet]
+    [HttpGet("AllBanks")]
     public async Task<ActionResult<IReadOnlyList<BankDto>>> GetAll(CancellationToken ct) =>
         Ok(await _service.GetAllAsync(ct));
 
-    [HttpPost]
+    [HttpPost("CreateBank")]
     [Authorize(Roles = "Accountant,Supervisor")]
     public async Task<ActionResult<Guid>> Create([FromBody] CreateBankDto dto, CancellationToken ct)
     {
+        Console.WriteLine("sdcsdfsfasfasfasfafasf");
         var id = await _service.CreateAsync(dto, ct);
         return CreatedAtAction(nameof(GetAll), new { id }, id);
     }

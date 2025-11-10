@@ -1,6 +1,6 @@
 using BusinessReportsManager.Application.DTOs;
 
-namespace BusinessReportsManager.Application.Services;
+namespace BusinessReportsManager.Application.AbstractServices;
 
 public interface IUserService
 {

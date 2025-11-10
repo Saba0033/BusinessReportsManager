@@ -1,8 +1,8 @@
 using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using BusinessReportsManager.Application.AbstractServices;
 using Swashbuckle.AspNetCore.Filters;
 
 namespace BusinessReportsManager.Api.Controllers;

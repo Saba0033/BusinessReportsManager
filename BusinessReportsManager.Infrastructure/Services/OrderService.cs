@@ -1,7 +1,7 @@
 using AutoMapper;
+using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.Common;
 using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Enums;
 using BusinessReportsManager.Domain.Interfaces;

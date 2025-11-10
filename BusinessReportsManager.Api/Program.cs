@@ -1,8 +1,7 @@
 using System.Text;
 using AutoMapper;
-using BusinessReportsManager.Api.Filters;
+using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.Common;
-using BusinessReportsManager.Application.Services;
 using BusinessReportsManager.Application.Validation;
 using BusinessReportsManager.Domain.Interfaces;
 using BusinessReportsManager.Infrastructure.DataAccess;
@@ -30,7 +29,7 @@ builder.Environment.EnvironmentName = "Development";
 // Controllers + Filters
 builder.Services.AddControllers(options =>
 {
-    options.Filters.Add<ConcurrencyExceptionFilter>();
+    // options.Filters.Add<ConcurrencyExceptionFilter>();
 }).AddNewtonsoftJson();
 
 builder.Services.AddProblemDetails();
