@@ -86,7 +86,7 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderDtoValidator>();
 
 // ✅ AutoMapper (fixes IMapper dependency issues)
-builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+builder.Services.AddAutoMapper(cfg => { /* optional config here */ }, typeof(Program).Assembly);
 
 // Swagger configuration
 builder.Services.AddEndpointsApiExplorer();

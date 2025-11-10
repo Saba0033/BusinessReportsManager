@@ -13,7 +13,7 @@ public class AppProfile : Profile
         CreateMap<CompanyParty, CompanyPartyDto>();
         CreateMap<CreatePersonPartyDto, PersonParty>();
         CreateMap<CreateCompanyPartyDto, CompanyParty>();
-
+ 
         CreateMap<Supplier, SupplierDto>();
         CreateMap<CreateSupplierDto, Supplier>();
         CreateMap<Bank, BankDto>();
