@@ -23,4 +23,21 @@ public class AuthController : ControllerBase
         var token = await _auth.LoginAsync(request, ct);
         return Ok(token);
     }
+
+    /// <summary>Register a user.</summary>
+    [HttpPost("register")]
+    public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _auth.RegisterAsync(request, ct);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            // Return 400 for business errors like "User already exists"
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
 }
