@@ -1,7 +1,6 @@
 using AutoMapper;
 using BusinessReportsManager.Application.DTOs;
 using BusinessReportsManager.Domain.Entities;
-using BusinessReportsManager.Domain.ValueObjects;
 
 namespace BusinessReportsManager.Application.Mappings;
 
@@ -9,51 +8,98 @@ public class AppProfile : Profile
 {
     public AppProfile()
     {
+        // ======================================================
+        // PRICE CURRENCY
+        // ======================================================
+        CreateMap<PriceCurrency, PriceCurrencyDto>();
+        CreateMap<PriceCurrencyCreateDto, PriceCurrency>();
+
+        // ======================================================
+        // ORDER PARTY
+        // ======================================================
         CreateMap<PersonParty, PersonPartyDto>();
         CreateMap<CompanyParty, CompanyPartyDto>();
-        CreateMap<CreatePersonPartyDto, PersonParty>();
-        CreateMap<CreateCompanyPartyDto, CompanyParty>();
 
+        // Create mappings only if needed (usually manually created)
+        CreateMap<PartyCreateDto, PersonParty>()
+            .ForMember(d => d.FirstName, o => o.MapFrom(s => s.FirstName))
+            .ForMember(d => d.LastName, o => o.MapFrom(s => s.LastName))
+            .ForMember(d => d.BirthDate, o => o.MapFrom(s => s.BirthDate));
+
+        CreateMap<PartyCreateDto, CompanyParty>()
+            .ForMember(d => d.CompanyName, o => o.MapFrom(s => s.CompanyName))
+            .ForMember(d => d.RegistrationNumber, o => o.MapFrom(s => s.RegistrationNumber))
+            .ForMember(d => d.ContactPerson, o => o.MapFrom(s => s.ContactPerson));
+
+        // ======================================================
+        // SUPPLIER
+        // ======================================================
         CreateMap<Supplier, SupplierDto>();
-        CreateMap<CreateSupplierDto, Supplier>();
-        CreateMap<Bank, BankDto>();
-        CreateMap<CreateBankDto, Bank>();
+        CreateMap<SupplierCreateDto, Supplier>();
 
-        CreateMap<Tour, TourDto>();
-        CreateMap<Destination, DestinationDto>();
-        CreateMap<AirTicket, AirTicketDto>();
-        CreateMap<HotelBooking, HotelBookingDto>();
-        CreateMap<ExtraService, ExtraServiceDto>();
-        CreateMap<CreateTourDto, Tour>()
-            .ForMember(d => d.Destinations, opt => opt.Ignore())
-            .ForMember(d => d.AirTickets, opt => opt.Ignore())
-            .ForMember(d => d.HotelBookings, opt => opt.Ignore())
-            .ForMember(d => d.ExtraServices, opt => opt.Ignore());
-
-        CreateMap<Order, OrderDetailsDto>()
-            .ForMember(d => d.OwnedByUserEmail, opt => opt.Ignore())
-            .ForMember(d => d.SellPrice, opt => opt.MapFrom(s => new MoneyDto(s.SellPrice.Amount, s.SellPrice.Currency)))
-            .ForMember(d => d.TicketSelfCost, opt => opt.MapFrom(s => new MoneyDto(s.TicketSelfCost.Amount, s.TicketSelfCost.Currency)))
-            .ForMember(d => d.PaymentStatus, opt => opt.Ignore())
-            .ForMember(d => d.Passengers, opt => opt.MapFrom(s => s.Passengers))
-            .ForMember(d => d.Payments, opt => opt.Ignore());
-        CreateMap<Order, OrderListItemDto>()
-
-            .ForMember(d => d.Tour, opt => opt.MapFrom(s => s.Tour != null ? s.Tour.Name : ""))
-            .ForMember(d => d.OwnedByUserEmail, opt => opt.Ignore())
-            .ForMember(d => d.SellPrice, opt => opt.MapFrom(s => new MoneyDto(s.SellPrice.Amount, s.SellPrice.Currency)))
-            .ForMember(d => d.PaymentStatus, opt => opt.Ignore());
-
+        // ======================================================
+        // PASSENGER
+        // ======================================================
         CreateMap<Passenger, PassengerDto>();
-        CreateMap<CreatePassengerDto, Passenger>();
+        CreateMap<PassengerCreateDto, Passenger>();
 
+        // ======================================================
+        // PAYMENT
+        // ======================================================
         CreateMap<Payment, PaymentDto>()
-            .ForMember(d => d.Amount, opt => opt.MapFrom(s => new MoneyDto(s.Amount.Amount, s.Amount.Currency)))
-            .ForMember(d => d.BankName, opt => opt.MapFrom(s => s.Bank != null ? s.Bank.Name : ""));
+            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
 
-        CreateMap<ExchangeRate, ExchangeRateDto>();
-        CreateMap<CreateExchangeRateDto, ExchangeRate>();
+        // ======================================================
+        // AIR TICKET
+        // ======================================================
+        CreateMap<AirTicket, AirTicketDto>()
+            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
 
-        CreateMap<MoneyDto, Money>();
+        CreateMap<AirTicketCreateDto, AirTicket>()
+            .ForMember(d => d.PriceCurrency, o => o.Ignore());
+
+        // ======================================================
+        // HOTEL BOOKING
+        // ======================================================
+        CreateMap<HotelBooking, HotelBookingDto>()
+            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
+
+        CreateMap<HotelBookingCreateDto, HotelBooking>()
+            .ForMember(d => d.PriceCurrency, o => o.Ignore());
+
+        // ======================================================
+        // EXTRA SERVICE
+        // ======================================================
+        CreateMap<ExtraService, ExtraServiceDto>()
+            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
+
+        CreateMap<ExtraServiceCreateDto, ExtraService>()
+            .ForMember(d => d.PriceCurrency, o => o.Ignore());
+
+        // ======================================================
+        // TOUR
+        // ======================================================
+        CreateMap<Tour, TourDto>()
+            .ForMember(d => d.Supplier, o => o.MapFrom(s => s.TourSupplier))
+            .ForMember(d => d.Passengers, o => o.MapFrom(s => s.Passengers))
+            .ForMember(d => d.AirTickets, o => o.MapFrom(s => s.AirTickets))
+            .ForMember(d => d.HotelBookings, o => o.MapFrom(s => s.HotelBookings))
+            .ForMember(d => d.ExtraServices, o => o.MapFrom(s => s.ExtraServices));
+
+        CreateMap<TourCreateDto, Tour>()
+            .ForMember(d => d.TourSupplier, o => o.Ignore())
+            .ForMember(d => d.Passengers, o => o.Ignore())
+            .ForMember(d => d.AirTickets, o => o.Ignore())
+            .ForMember(d => d.HotelBookings, o => o.Ignore())
+            .ForMember(d => d.ExtraServices, o => o.Ignore());
+
+        // ======================================================
+        // ORDER
+        // ======================================================
+        CreateMap<Order, OrderDto>()
+            .ForMember(d => d.PersonParty, o => o.MapFrom(s => s.OrderParty as PersonParty))
+            .ForMember(d => d.CompanyParty, o => o.MapFrom(s => s.OrderParty as CompanyParty))
+            .ForMember(d => d.Tour, o => o.MapFrom(s => s.Tour))
+            .ForMember(d => d.Payments, o => o.MapFrom(s => s.Payments));
     }
 }

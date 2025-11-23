@@ -1,84 +1,150 @@
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Enums;
-using BusinessReportsManager.Domain.ValueObjects;
 using BusinessReportsManager.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-
-using BusinessReportsManager.Infrastructure.DataAccess;
 
 namespace BusinessReportsManager.Infrastructure.DataAccess.Seeders;
 
 public static class AppDbSeeder
 {
-    public static async Task SeedAsync(AppDbContext db, UserManager<AppUser> userManager, RoleManager<IdentityRole> roleManager)
+    public static async Task SeedAsync(
+        AppDbContext db,
+        UserManager<AppUser> userManager,
+        RoleManager<IdentityRole> roleManager)
     {
-        string[] roles = new[] { "Employee", "Accountant", "Supervisor" };
+        // ---------------------------------------------
+        // 1. Create Roles
+        // ---------------------------------------------
+        string[] roles = { "Employee", "Accountant", "Supervisor" };
+
         foreach (var role in roles)
         {
-            if (!await roleManager.Roles.AnyAsync(r => r.Name == role))
+            if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));
         }
 
-        async Task<AppUser> EnsureUserAsync(string email, string role)
+        // ---------------------------------------------
+        // 2. Create Users (with real emails + safe password)
+        // ---------------------------------------------
+        async Task<AppUser> EnsureUser(string email, string role)
         {
-            var u = await userManager.FindByEmailAsync(email);
-            if (u == null)
+            var user = await userManager.FindByEmailAsync(email);
+
+            if (user == null)
             {
-                u = new AppUser { UserName = email, Email = email };
-                await userManager.CreateAsync(u, "P@ssw0rd!");
+                user = new AppUser
+                {
+                    UserName = email,
+                    Email = email
+                };
+
+                // Use guaranteed-valid password
+                var create = await userManager.CreateAsync(user, "P@ssword1");
+
+                if (!create.Succeeded)
+                {
+                    throw new Exception(
+                        "User creation failed: " +
+                        string.Join(", ", create.Errors.Select(e => e.Description))
+                    );
+                }
             }
-            if (!await userManager.IsInRoleAsync(u, role))
-                await userManager.AddToRoleAsync(u, role);
-            return u;
+
+            // Add to role
+            if (!await userManager.IsInRoleAsync(user, role))
+            {
+                var addRole = await userManager.AddToRoleAsync(user, role);
+
+                if (!addRole.Succeeded)
+                {
+                    throw new Exception(
+                        "AddToRole failed: " +
+                        string.Join(", ", addRole.Errors.Select(e => e.Description))
+                    );
+                }
+            }
+
+            return user;
         }
 
-        var employee = await EnsureUserAsync("employee1@demo.local", "Employee");
-        var accountant = await EnsureUserAsync("accountant1@demo.local", "Accountant");
-        var supervisor = await EnsureUserAsync("supervisor1@demo.local", "Supervisor");
+        var employee = await EnsureUser("employee@demo.local", "Employee");
+        var accountant = await EnsureUser("accountant@demo.local", "Accountant");
+        var supervisor = await EnsureUser("supervisor@demo.local", "Supervisor");
 
-        if (!await db.Banks.AnyAsync())
-        {
-            db.Banks.AddRange(
-                new Bank { Name = "TBC Bank", Swift = "TBCBGE22", AccountNumber = "GE00TB0000000000000000" },
-                new Bank { Name = "Bank of Georgia", Swift = "BGEEGE22", AccountNumber = "GE00BG0000000000000000" }
-            );
-            await db.SaveChangesAsync();
-        }
-
+        // ---------------------------------------------
+        // 3. Suppliers
+        // ---------------------------------------------
         if (!await db.Suppliers.AnyAsync())
         {
             db.Suppliers.AddRange(
                 new Supplier { Name = "GeoTravel Supplier", ContactEmail = "contact@geotravel.local" },
                 new Supplier { Name = "Caucasus Tours", ContactEmail = "sales@caucasustours.local" }
             );
+
             await db.SaveChangesAsync();
         }
 
+        // ---------------------------------------------
+        // 4. Order Party (Person)
+        // ---------------------------------------------
         var party = await db.PersonParties.FirstOrDefaultAsync();
         if (party == null)
         {
-            party = new PersonParty { Email = "customer@demo.local", FirstName = "Nino", LastName = "Beridze" };
+            party = new PersonParty
+            {
+                Email = "customer@demo.local",
+                FirstName = "Nino",
+                LastName = "Beridze",
+                BirthDate = new DateOnly(1990, 1, 1)
+            };
+
             db.PersonParties.Add(party);
             await db.SaveChangesAsync();
         }
 
-        var tour = await db.Tours.Include(t => t.Destinations).FirstOrDefaultAsync();
+        // ---------------------------------------------
+        // 5. Create Tour + Passengers
+        // ---------------------------------------------
+        var tour = await db.Tours.Include(t => t.Passengers).FirstOrDefaultAsync();
         if (tour == null)
         {
+            var supplier = await db.Suppliers.FirstAsync();
+
             tour = new Tour
             {
                 Name = "Tbilisi & Batumi Highlights",
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(10)),
-                EndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(17)),
-                PassengerCount = 2
+                StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
+                EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(17)),
+                PassengerCount = 2,
+                TourSupplierId = supplier.Id
             };
-            tour.Destinations.Add(new Destination { Country = "Georgia", City = "Tbilisi" });
-            tour.Destinations.Add(new Destination { Country = "Georgia", City = "Batumi" });
+
             db.Tours.Add(tour);
+            await db.SaveChangesAsync(); // IMPORTANT: Must save before passengers
+
+            db.Passengers.AddRange(
+                new Passenger
+                {
+                    TourId = tour.Id,
+                    FirstName = "Nino",
+                    LastName = "Beridze",
+                    BirthDate = new DateOnly(1990, 1, 1)
+                },
+                new Passenger
+                {
+                    TourId = tour.Id,
+                    FirstName = "Giorgi",
+                    LastName = "Beridze"
+                }
+            );
+
             await db.SaveChangesAsync();
         }
 
+        // ---------------------------------------------
+        // 6. Order + Payment
+        // ---------------------------------------------
         if (!await db.Orders.AnyAsync())
         {
             var order = new Order
@@ -87,39 +153,35 @@ public static class AppDbSeeder
                 OrderPartyId = party.Id,
                 TourId = tour.Id,
                 Source = "Seed",
-                SellPrice = new Money(1000m, Currency.GEL),
-                TicketSelfCost = new Money(600m, Currency.GEL),
-                OwnedByUserId = employee.Id,
+                SellPriceInGel = 1000m,
                 Status = OrderStatus.Open
             };
-
-            order.Passengers.Add(new Passenger { FirstName = "Nino", LastName = "Beridze", IsPrimary = true, BirthDate = new DateOnly(1990,1,1) });
-            order.Passengers.Add(new Passenger { FirstName = "Giorgi", LastName = "Beridze", IsPrimary = false });
 
             db.Orders.Add(order);
             await db.SaveChangesAsync();
 
-            var tbc = await db.Banks.FirstAsync(b => b.Name.Contains("TBC"));
+            // Currency
+            var curr = new PriceCurrency
+            {
+                Currency = Currency.GEL,
+                Amount = 300m,
+                ExchangeRateToGel = 1m,
+                EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            };
+
+            db.PriceCurrencies.Add(curr);
+            await db.SaveChangesAsync();
+
+            // Payment
             db.Payments.Add(new Payment
             {
                 OrderId = order.Id,
-                Amount = new Money(300m, Currency.GEL),
-                BankId = tbc.Id,
-                PaidDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+                PriceCurrencyId = curr.Id,
+                BankName = "TBC",
+                PaidDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Reference = "Advance"
             });
-            await db.SaveChangesAsync();
-        }
 
-        if (!await db.ExchangeRates.AnyAsync())
-        {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
-            db.ExchangeRates.AddRange(
-                new ExchangeRate { FromCurrency = Currency.GEL, ToCurrency = Currency.USD, Rate = 0.37m, EffectiveDate = today.AddDays(-10) },
-                new ExchangeRate { FromCurrency = Currency.USD, ToCurrency = Currency.GEL, Rate = 2.7m, EffectiveDate = today.AddDays(-10) },
-                new ExchangeRate { FromCurrency = Currency.GEL, ToCurrency = Currency.EUR, Rate = 0.34m, EffectiveDate = today.AddDays(-10) },
-                new ExchangeRate { FromCurrency = Currency.EUR, ToCurrency = Currency.GEL, Rate = 2.94m, EffectiveDate = today.AddDays(-10) }
-            );
             await db.SaveChangesAsync();
         }
     }

@@ -1,56 +1,76 @@
-using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
-using Microsoft.AspNetCore.Authorization;
+using BusinessReportsManager.Application.AbstractServices;
 using Microsoft.AspNetCore.Mvc;
-using Swashbuckle.AspNetCore.Filters;
 
-namespace BusinessReportsManager.Api.Controllers;
+namespace BusinessReportsManager.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
 public class ToursController : ControllerBase
 {
     private readonly ITourService _service;
 
-    public ToursController(ITourService service) => _service = service;
-
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<TourDto>> Get(Guid id, CancellationToken ct)
+    public ToursController(ITourService service)
     {
-        var dto = await _service.GetAsync(id, ct);
-        return dto is null ? NotFound() : Ok(dto);
+        _service = service;
     }
 
+    // ---------------------------
+    // Get All Tours
+    // ---------------------------
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<TourDto>>> Filter([FromQuery] DateOnly? start, [FromQuery] DateOnly? end, [FromQuery] Guid? supplierId, [FromQuery] string? destination, CancellationToken ct)
+    public async Task<IActionResult> GetAll()
     {
-        var list = await _service.GetFilteredAsync(start, end, supplierId, destination, ct);
-        return Ok(list);
+        var tours = await _service.GetAllToursAsync();
+        return Ok(tours);
+    }
+
+    // ---------------------------
+    // Get Tour by Id
+    // ---------------------------
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> Get(Guid id)
+    {
+        var tour = await _service.GetTourAsync(id);
+        if (tour == null) return NotFound();
+
+        return Ok(tour);
+    }
+
+    // ---------------------------
+    // Create Tour
+    // ---------------------------
+    public class CreateTourDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public DateOnly StartDate { get; set; }
+        public DateOnly EndDate { get; set; }
+        public int PassengerCount { get; set; }
+        public Guid SupplierId { get; set; }
     }
 
     [HttpPost]
-    [Authorize(Roles = "Accountant,Supervisor")]
-    [SwaggerRequestExample(typeof(CreateTourDto), typeof(BusinessReportsManager.Api.Extensions.CreateTourExample))]
-    public async Task<ActionResult<Guid>> Create([FromBody] CreateTourDto dto, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateTourDto dto)
     {
-        var id = await _service.CreateAsync(dto, ct);
-        return CreatedAtAction(nameof(Get), new { id }, id);
+        var tour = await _service.CreateTourAsync(
+            dto.Name,
+            dto.StartDate,
+            dto.EndDate,
+            dto.PassengerCount,
+            dto.SupplierId
+        );
+
+        return CreatedAtAction(nameof(Get), new { id = tour.Id }, tour);
     }
 
-    [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Accountant,Supervisor")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] CreateTourDto dto, CancellationToken ct)
-    {
-        await _service.UpdateAsync(id, dto, ct);
-        return NoContent();
-    }
-
+    // ---------------------------
+    // Delete Tour
+    // ---------------------------
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Supervisor")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Delete(Guid id)
     {
-        await _service.DeleteAsync(id, ct);
+        var success = await _service.DeleteTourAsync(id);
+
+        if (!success) return NotFound();
         return NoContent();
     }
 }

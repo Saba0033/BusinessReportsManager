@@ -1,272 +1,329 @@
 using AutoMapper;
-using BusinessReportsManager.Application.Common;
+using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Enums;
 using BusinessReportsManager.Domain.Interfaces;
-using BusinessReportsManager.Domain.Queries;
-using BusinessReportsManager.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessReportsManager.Infrastructure.Services;
 
 public class OrderService : IOrderService
 {
-    private readonly IGenericRepository _repo;
+    private readonly IUnitOfWork _uow;
     private readonly IMapper _mapper;
-    private readonly IOrderNumberGenerator _numberGenerator;
-    private readonly IExchangeRateService _rates;
-    private readonly IUserService _users;
 
-    public OrderService(
-        IGenericRepository repo,
-        IMapper mapper,
-        IOrderNumberGenerator numberGenerator,
-        IExchangeRateService rates,
-        IUserService userService)
+    public OrderService(IUnitOfWork uow, IMapper mapper)
     {
-        _repo = repo;
+        _uow = uow;
         _mapper = mapper;
-        _numberGenerator = numberGenerator;
-        _rates = rates;
-        _users = userService;
     }
 
-    public async Task<Guid> CreateAsync(CreateOrderDto dto, string userId, CancellationToken ct = default)
+    // ---------------------------------------------------
+    // CREATE FULL ORDER
+    // ---------------------------------------------------
+    public async Task<OrderDto> CreateFullOrderAsync(OrderCreateDto dto)
     {
-        var party = await _repo.GetByIdAsync<OrderParty>(dto.OrderPartyId, ct) ?? throw new KeyNotFoundException("Order party not found");
-        var tour   = await _repo.GetByIdAsync<Tour>(dto.TourId, ct)       ?? throw new KeyNotFoundException("Tour not found");
+        //
+        // 1) CREATE PARTY
+        //
+        OrderParty party = dto.Party.Type.Equals("Company", StringComparison.OrdinalIgnoreCase)
+            ? _mapper.Map<CompanyParty>(dto.Party)
+            : _mapper.Map<PersonParty>(dto.Party);
 
+        await _uow.OrderParties.AddAsync(party);
+
+        //
+        // 2) CREATE TOUR
+        //
+        var tour = _mapper.Map<Tour>(dto.Tour);
+
+        // Supplier
+        var supplier = _mapper.Map<Supplier>(dto.Tour.Supplier);
+        tour.TourSupplier = supplier;
+
+        await _uow.Tours.AddAsync(tour);
+
+        //
+        // 2.1) Passengers
+        //
+        foreach (var p in dto.Passengers)
+        {
+            var passenger = _mapper.Map<Passenger>(p);
+            passenger.Tour = tour;
+            await _uow.Passengers.AddAsync(passenger);
+        }
+
+        //
+        // 2.2) Air tickets
+        //
+        foreach (var t in dto.Tour.AirTickets)
+        {
+            var ticket = _mapper.Map<AirTicket>(t);
+            ticket.Tour = tour;
+
+            var price = _mapper.Map<PriceCurrency>(t.Price);
+            ticket.PriceCurrency = price;
+
+            await _uow.PriceCurrencies.AddAsync(price);
+            await _uow.AirTickets.AddAsync(ticket);
+        }
+
+        //
+        // 2.3) Hotel bookings
+        //
+        foreach (var h in dto.Tour.HotelBookings)
+        {
+            var hotel = _mapper.Map<HotelBooking>(h);
+            hotel.Tour = tour;
+
+            var price = _mapper.Map<PriceCurrency>(h.Price);
+            hotel.PriceCurrency = price;
+
+            await _uow.PriceCurrencies.AddAsync(price);
+            await _uow.HotelBookings.AddAsync(hotel);
+        }
+
+        //
+        // 2.4) Extra services
+        //
+        foreach (var e in dto.Tour.ExtraServices)
+        {
+            var extra = _mapper.Map<ExtraService>(e);
+            extra.Tour = tour;
+
+            var price = _mapper.Map<PriceCurrency>(e.Price);
+            extra.PriceCurrency = price;
+
+            await _uow.PriceCurrencies.AddAsync(price);
+            await _uow.ExtraServices.AddAsync(extra);
+        }
+
+        //
+        // 3) CREATE ORDER
+        //
         var order = new Order
         {
-            OrderNumber = await _numberGenerator.NextOrderNumberAsync(ct),
-            OrderPartyId = party.Id,
-            TourId = tour.Id,
+            OrderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6]}",
             Source = dto.Source,
-            SellPrice = new Money(dto.SellPrice.Amount, dto.SellPrice.Currency),
-            TicketSelfCost = new Money(dto.TicketSelfCost.Amount, dto.TicketSelfCost.Currency),
-            OwnedByUserId = userId,
-            Status = OrderStatus.Open
+            SellPriceInGel = dto.SellPriceInGel,
+            Status = OrderStatus.Open,
+            OrderParty = party,
+            Tour = tour
         };
-        await _repo.AddAsync(order, ct);
-        await _repo.SaveChangesAsync(ct);
-        return order.Id;
-    }
 
-    public async Task<OrderDetailsDto?> GetAsync(Guid id, string requesterUserId, bool canViewAll, CancellationToken ct = default)
-    {
-        var order = await _repo.Query<Order>()
-            .Include(o => o.OrderParty)
-            .Include(o => o.Tour)
-            .Include(o => o.Passengers)
-            .Include(o => o.Payments).ThenInclude(p => p.Bank)
-            .FirstOrDefaultAsync(o => o.Id == id, ct);
+        await _uow.Orders.AddAsync(order);
 
-        if (order is null) return null;
-
-        if (!canViewAll && order.OwnedByUserId != requesterUserId && order.Status != OrderStatus.Open)
-            throw new UnauthorizedAccessException("You can only view your own open orders.");
-
-        var dto = _mapper.Map<OrderDetailsDto>(order);
-        dto = dto with
+        //
+        // 4) INIT PAYMENTS
+        //
+        foreach (var pay in dto.Payments)
         {
-            OwnedByUserEmail = await _users.GetEmailAsync(order.OwnedByUserId, ct) ?? "",
-            Payments = order.Payments.Select(p =>
-                new PaymentDto(p.Id, new MoneyDto(p.Amount.Amount, p.Amount.Currency), p.BankId, p.Bank?.Name ?? "", p.PaidDate, p.Reference)).ToList(),
-            PaymentStatus = GetPaymentStatus(order)
-        };
-        return dto;
-    }
-
-    public async Task<PagedResult<OrderListItemDto>> GetPagedAsync(PagedRequest request, string requesterUserId, bool canViewAll, CancellationToken ct = default)
-    {
-        var q = _repo.Query<Order>()
-            .Include(o => o.OrderParty)
-            .Include(o => o.Tour)
-            .Include(o => o.Payments);
-
-       
-
-        var total = await q.CountAsync(ct);
-        var items = await q
-            .OrderByDescending(o => o.CreatedAtUtc)
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .ToListAsync(ct);
-
-        var list = new List<OrderListItemDto>(items.Count);
-        foreach (var o in items)
-        {
-            var dto = _mapper.Map<OrderListItemDto>(o);
-            dto = dto with
+            var price = _mapper.Map<PriceCurrency>(new PriceCurrencyCreateDto
             {
-                OwnedByUserEmail = await _users.GetEmailAsync(o.OwnedByUserId, ct) ?? "",
-                PaymentStatus = GetPaymentStatus(o)
+                Amount = pay.Amount,
+                Currency = pay.Currency,
+                ExchangeRateToGel = 1 // or dto value if required
+            });
+
+            await _uow.PriceCurrencies.AddAsync(price);
+
+            var payment = new Payment
+            {
+                Order = order,
+                PriceCurrency = price,
+                BankName = pay.BankName,
+                Reference = pay.Reference,
+                PaidDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
-            list.Add(dto);
+
+            await _uow.Payments.AddAsync(payment);
         }
 
-        return new PagedResult<OrderListItemDto>
+        await _uow.SaveChangesAsync();
+
+        return _mapper.Map<OrderDto>(order);
+    }
+
+    // ---------------------------------------------------
+    // EDIT ORDER
+    // ---------------------------------------------------
+    public async Task<OrderDto?> EditOrderAsync(Guid orderId, OrderEditDto dto)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return null;
+
+        if (dto.SellPriceInGel.HasValue)
+            order.SellPriceInGel = dto.SellPriceInGel.Value;
+
+        if (!string.IsNullOrWhiteSpace(dto.Source))
+            order.Source = dto.Source;
+
+        await _uow.Orders.UpdateAsync(order);
+        await _uow.SaveChangesAsync();
+
+        return _mapper.Map<OrderDto>(order);
+    }
+
+    // ---------------------------------------------------
+    // ADD PAYMENT
+    // ---------------------------------------------------
+    public async Task<PaymentDto?> AddPaymentAsync(Guid orderId, PaymentCreateDto dto)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return null;
+
+        var price = _mapper.Map<PriceCurrency>(new PriceCurrencyCreateDto
         {
-            Page = request.Page,
-            PageSize = request.PageSize,
-            TotalCount = total,
-            Items = list
-        };
-    }
+            Amount = dto.Amount,
+            Currency = dto.Currency,
+            ExchangeRateToGel = 1 // default
+        });
 
-    public async Task UpdateAsync(Guid id, UpdateOrderDto dto, string requesterUserId, bool canEditAll, CancellationToken ct = default)
-    {
-        var order = await _repo.GetByIdAsync<Order>(id, ct) ?? throw new KeyNotFoundException();
-        if (!canEditAll && (order.OwnedByUserId != requesterUserId || order.Status != OrderStatus.Open))
-            throw new UnauthorizedAccessException("Employees can edit only their own open orders.");
-
-        if (!string.IsNullOrWhiteSpace(dto.RowVersionBase64))
-        {
-            var clientRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
-            await _repo.SetOriginalRowVersion(order, clientRowVersion);
-        }
-
-        order.Source = dto.Source ?? order.Source;
-        order.SellPrice = new Money(dto.SellPrice.Amount, dto.SellPrice.Currency);
-        order.TicketSelfCost = new Money(dto.TicketSelfCost.Amount, dto.TicketSelfCost.Currency);
-        order.UpdatedAtUtc = DateTime.UtcNow;
-
-        await _repo.Update(order);
-        await _repo.SaveChangesAsync(ct);
-    }
-
-    public async Task FinalizeAsync(Guid id, CancellationToken ct = default)
-    {
-        var order = await _repo.GetByIdAsync<Order>(id, ct) ?? throw new KeyNotFoundException();
-        order.Status = OrderStatus.Finalized;
-        await _repo.Update(order);
-        await _repo.SaveChangesAsync(ct);
-    }
-
-    public async Task ReopenAsync(Guid id, CancellationToken ct = default)
-    {
-        var order = await _repo.GetByIdAsync<Order>(id, ct) ?? throw new KeyNotFoundException();
-        order.Status = OrderStatus.Open;
-        await _repo.Update(order);
-        await _repo.SaveChangesAsync(ct);
-    }
-
-    public async Task<PassengerDto> AddPassengerAsync(Guid orderId, CreatePassengerDto dto, string requesterUserId, bool canEditAll, CancellationToken ct = default)
-    {
-        var orderSlim = await _repo.Query<Order>()
-            .Where(o => o.Id == orderId)
-            .Select(o => new { o.Id, o.OwnedByUserId, o.Status })
-            .FirstOrDefaultAsync(ct) ?? throw new KeyNotFoundException();
-
-        if (!canEditAll && (orderSlim.OwnedByUserId != requesterUserId || orderSlim.Status != OrderStatus.Open))
-            throw new UnauthorizedAccessException("Employees can edit only their own open orders.");
-
-        var p = _mapper.Map<Passenger>(dto);
-        p.OrderId = orderId;
-        await _repo.AddAsync(p, ct);
-        await _repo.SaveChangesAsync(ct);
-        return _mapper.Map<PassengerDto>(p);
-    }
-
-    public async Task DeletePassengerAsync(Guid orderId, Guid passengerId, string requesterUserId, bool canEditAll, CancellationToken ct = default)
-    {
-        var orderSlim = await _repo.Query<Order>()
-            .Where(o => o.Id == orderId)
-            .Select(o => new { o.Id, o.OwnedByUserId, o.Status })
-            .FirstOrDefaultAsync(ct) ?? throw new KeyNotFoundException();
-
-        if (!canEditAll && (orderSlim.OwnedByUserId != requesterUserId || orderSlim.Status != OrderStatus.Open))
-            throw new UnauthorizedAccessException("Employees can edit only their own open orders.");
-
-        var p = await _repo.Query<Passenger>(asNoTracking: false)
-            .FirstOrDefaultAsync(x => x.Id == passengerId && x.OrderId == orderId, ct)
-            ?? throw new KeyNotFoundException();
-
-        await _repo.Remove(p);
-        await _repo.SaveChangesAsync(ct);
-    }
-
-    public async Task<IReadOnlyList<PaymentDto>> GetPaymentsAsync(Guid orderId, string requesterUserId, bool canViewAll, CancellationToken ct = default)
-    {
-        var orderSlim = await _repo.Query<Order>()
-            .Where(o => o.Id == orderId)
-            .Select(o => new { o.Id, o.OwnedByUserId, o.Status })
-            .FirstOrDefaultAsync(ct) ?? throw new KeyNotFoundException();
-
-        if (!canViewAll && orderSlim.OwnedByUserId != requesterUserId && orderSlim.Status != OrderStatus.Open)
-            throw new UnauthorizedAccessException("You can only view your own open orders.");
-
-        var payments = await _repo.Query<Payment>()
-            .Include(p => p.Bank)
-            .Where(p => p.OrderId == orderId)
-            .ToListAsync(ct);
-
-        return payments.Select(p =>
-            new PaymentDto(p.Id, new MoneyDto(p.Amount.Amount, p.Amount.Currency), p.BankId, p.Bank?.Name ?? "", p.PaidDate, p.Reference)).ToList();
-    }
-
-    public async Task<PaymentDto> AddPaymentAsync(Guid orderId, CreatePaymentDto dto, string requesterUserId, bool canEditAll, CancellationToken ct = default)
-    {
-        var orderSlim = await _repo.Query<Order>()
-            .Where(o => o.Id == orderId)
-            .Select(o => new { o.Id, o.OwnedByUserId, o.Status })
-            .FirstOrDefaultAsync(ct) ?? throw new KeyNotFoundException();
-
-        if (!canEditAll && (orderSlim.OwnedByUserId != requesterUserId || orderSlim.Status != OrderStatus.Open))
-            throw new UnauthorizedAccessException("Employees can edit only their own open orders.");
-
-        var bank = await _repo.GetByIdAsync<Bank>(dto.BankId, ct) ?? throw new KeyNotFoundException("Bank not found");
+        await _uow.PriceCurrencies.AddAsync(price);
 
         var payment = new Payment
         {
             OrderId = orderId,
-            Amount = new Money(dto.Amount.Amount, dto.Amount.Currency),
-            BankId = bank.Id,
-            PaidDate = dto.PaidDate,
-            Reference = dto.Reference
+            PriceCurrency = price,
+            BankName = dto.BankName,
+            Reference = dto.Reference,
+            PaidDate = DateOnly.FromDateTime(DateTime.UtcNow)
         };
-        await _repo.AddAsync(payment, ct);
-        await _repo.SaveChangesAsync(ct);
 
-        return new PaymentDto(
-            payment.Id,
-            new MoneyDto(payment.Amount.Amount, payment.Amount.Currency),
-            bank.Id,
-            bank.Name,
-            payment.PaidDate,
-            payment.Reference);
+        await _uow.Payments.AddAsync(payment);
+        await _uow.SaveChangesAsync();
+
+        return _mapper.Map<PaymentDto>(payment);
     }
 
-    public async Task DeletePaymentAsync(Guid orderId, Guid paymentId, string requesterUserId, bool canEditAll, CancellationToken ct = default)
+    // ---------------------------------------------------
+    // REMOVE PAYMENT
+    // ---------------------------------------------------
+    public async Task<bool> RemovePaymentAsync(Guid paymentId)
     {
-        var orderSlim = await _repo.Query<Order>()
-            .Where(o => o.Id == orderId)
-            .Select(o => new { o.Id, o.OwnedByUserId, o.Status })
-            .FirstOrDefaultAsync(ct) ?? throw new KeyNotFoundException();
+        var payment = await _uow.Payments.GetByIdAsync(paymentId);
+        if (payment == null) return false;
 
-        if (!canEditAll && (orderSlim.OwnedByUserId != requesterUserId || orderSlim.Status != OrderStatus.Open))
-            throw new UnauthorizedAccessException("Employees can edit only their own open orders.");
-
-        var p = await _repo.Query<Payment>(asNoTracking: false)
-            .FirstOrDefaultAsync(x => x.Id == paymentId && x.OrderId == orderId, ct)
-            ?? throw new KeyNotFoundException();
-
-        await _repo.Remove(p);
-        await _repo.SaveChangesAsync(ct);
+        await _uow.Payments.RemoveAsync(payment);
+        await _uow.SaveChangesAsync();
+        return true;
     }
 
-    private string GetPaymentStatus(Order order)
+    // ---------------------------------------------------
+    // CHANGE STATUS
+    // ---------------------------------------------------
+    public async Task<bool> ChangeStatusAsync(Guid orderId, OrderStatus newStatus)
     {
-        decimal total = 0m;
-        foreach (var pay in order.Payments)
-        {
-            total += _rates.Convert(pay.Amount.Currency, order.SellPrice.Currency, pay.Amount.Amount, pay.PaidDate);
-        }
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return false;
 
-        if (total <= 0) return PaymentStatus.NotPaid.ToString();
-        if (total < order.SellPrice.Amount) return PaymentStatus.PartiallyPaid.ToString();
-        return PaymentStatus.PaidInFull.ToString();
+        order.Status = newStatus;
+
+        await _uow.Orders.UpdateAsync(order);
+        await _uow.SaveChangesAsync();
+
+        return true;
+    }
+
+    // ---------------------------------------------------
+    // DELETE ORDER
+    // ---------------------------------------------------
+    public async Task<bool> DeleteOrderAsync(Guid orderId)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return false;
+
+        await _uow.Orders.RemoveAsync(order);
+        await _uow.SaveChangesAsync();
+
+        return true;
+    }
+
+    // ---------------------------------------------------
+    // GET ALL
+    // ---------------------------------------------------
+    public async Task<List<OrderDto>> GetAllAsync()
+    {
+        var orders = await _uow.Orders.Query()
+            .Include(o => o.OrderParty)
+            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .ToListAsync();
+
+        return _mapper.Map<List<OrderDto>>(orders);
+    }
+
+    // ---------------------------------------------------
+    // GET BY ID
+    // ---------------------------------------------------
+    public async Task<OrderDto?> GetByIdAsync(Guid id)
+    {
+        var order = await _uow.Orders.Query()
+            .Include(o => o.OrderParty)
+            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        return order == null ? null : _mapper.Map<OrderDto>(order);
+    }
+
+    // ---------------------------------------------------
+    // GET BY STATUS
+    // ---------------------------------------------------
+    public async Task<List<OrderDto>> GetByStatusAsync(OrderStatus status)
+    {
+        var orders = await _uow.Orders.Query(o => o.Status == status)
+            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.Tour)
+            .ToListAsync();
+
+        return _mapper.Map<List<OrderDto>>(orders);
+    }
+
+    // ---------------------------------------------------
+    // GET BY PARTY
+    // ---------------------------------------------------
+    public async Task<List<OrderDto>> GetByPartyAsync(Guid partyId)
+    {
+        var orders = await _uow.Orders.Query(o => o.OrderPartyId == partyId)
+            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.Tour)
+            .ToListAsync();
+
+        return _mapper.Map<List<OrderDto>>(orders);
+    }
+
+    // ---------------------------------------------------
+    // GET BY DATE RANGE
+    // ---------------------------------------------------
+    public async Task<List<OrderDto>> GetByDateRangeAsync(DateTime start, DateTime end)
+    {
+        var orders = await _uow.Orders.Query(o =>
+                o.CreatedAtUtc >= start && o.CreatedAtUtc <= end)
+            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.Tour)
+            .ToListAsync();
+
+        return _mapper.Map<List<OrderDto>>(orders);
+    }
+
+    // ---------------------------------------------------
+    // TOTAL PAID
+    // ---------------------------------------------------
+    public async Task<decimal> GetTotalPaidAsync(Guid orderId)
+    {
+        return await _uow.Payments.Query(p => p.OrderId == orderId)
+            .Join(_uow.PriceCurrencies.Query(),
+                  p => p.PriceCurrencyId,
+                  c => c.Id,
+                  (p, c) => c.Amount)
+            .SumAsync();
     }
 }

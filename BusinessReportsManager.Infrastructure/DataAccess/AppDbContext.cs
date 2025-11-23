@@ -9,20 +9,18 @@ public class AppDbContext : IdentityDbContext<AppUser>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<OrderParty> OrderParties => Set<OrderParty>();
     public DbSet<PersonParty> PersonParties => Set<PersonParty>();
     public DbSet<CompanyParty> CompanyParties => Set<CompanyParty>();
     public DbSet<Tour> Tours => Set<Tour>();
-    public DbSet<Destination> Destinations => Set<Destination>();
     public DbSet<AirTicket> AirTickets => Set<AirTicket>();
     public DbSet<HotelBooking> HotelBookings => Set<HotelBooking>();
     public DbSet<ExtraService> ExtraServices => Set<ExtraService>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<Passenger> Passengers => Set<Passenger>();
     public DbSet<Payment> Payments => Set<Payment>();
-    public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
+    public DbSet<PriceCurrency> PriceCurrencies => Set<PriceCurrency>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,11 +42,6 @@ public class AppDbContext : IdentityDbContext<AppUser>
             b.Property(t => t.StartDate).HasColumnType("date");
             b.Property(t => t.EndDate).HasColumnType("date");
 
-            b.HasMany(t => t.Destinations)
-                .WithOne(d => d.Tour)
-                .HasForeignKey(d => d.TourId)
-                .OnDelete(DeleteBehavior.Cascade);
-
             b.HasMany(t => t.AirTickets)
                 .WithOne(d => d.Tour)
                 .HasForeignKey(d => d.TourId)
@@ -63,6 +56,12 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .WithOne(d => d.Tour)
                 .HasForeignKey(d => d.TourId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // NEW: Tour ↔ Passengers
+            b.HasMany(t => t.Passengers)
+                .WithOne(p => p.Tour!)
+                .HasForeignKey(p => p.TourId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ---- Supplier–Tour relationship ----
@@ -71,13 +70,6 @@ public class AppDbContext : IdentityDbContext<AppUser>
             .WithMany(s => s.Tours)
             .HasForeignKey(t => t.TourSupplierId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // ---- Destination ----
-        modelBuilder.Entity<Destination>(b =>
-        {
-            b.Property(d => d.Country).HasMaxLength(100);
-            b.Property(d => d.City).HasMaxLength(100);
-        });
 
         // ---- Air Ticket ----
         modelBuilder.Entity<AirTicket>(b =>
@@ -97,7 +89,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
         {
             b.HasIndex(o => o.OrderNumber).IsUnique();
 
-            // ✅ PostgreSQL-native optimistic concurrency using xmin
+            // PostgreSQL-native optimistic concurrency using xmin
             b.Property<uint>("xmin")
                 .IsRowVersion()
                 .HasColumnName("xmin");
@@ -112,28 +104,11 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .HasForeignKey(o => o.TourId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // ---- Money / value objects ----
-            b.OwnsOne(o => o.SellPrice, m =>
-            {
-                m.Property(x => x.Amount).HasColumnType("numeric(18,2)");
-                m.Property(x => x.Currency)
-                    .HasConversion<string>()
-                    .HasMaxLength(3);
-            });
+            // SellPriceInGel is a simple decimal now; no value object
+            b.Property(o => o.SellPriceInGel)
+                .HasColumnType("numeric(18,2)");
 
-            b.OwnsOne(o => o.TicketSelfCost, m =>
-            {
-                m.Property(x => x.Amount).HasColumnType("numeric(18,2)");
-                m.Property(x => x.Currency)
-                    .HasConversion<string>()
-                    .HasMaxLength(3);
-            });
-
-            b.HasMany(o => o.Passengers)
-                .WithOne(p => p.Order!)
-                .HasForeignKey(p => p.OrderId)
-                .OnDelete(DeleteBehavior.Cascade);
-
+            // Order ↔ Payments
             b.HasMany(o => o.Payments)
                 .WithOne(p => p.Order!)
                 .HasForeignKey(p => p.OrderId)
@@ -149,31 +124,15 @@ public class AppDbContext : IdentityDbContext<AppUser>
         // ---- Payment ----
         modelBuilder.Entity<Payment>(b =>
         {
-            b.OwnsOne(p => p.Amount, m =>
-            {
-                m.Property(x => x.Amount).HasColumnType("numeric(18,2)");
-                m.Property(x => x.Currency)
-                    .HasConversion<string>()
-                    .HasMaxLength(3);
-            });
-
             b.Property(p => p.PaidDate).HasColumnType("date");
+
+            b.HasOne(p => p.PriceCurrency)
+                .WithMany()
+                .HasForeignKey(p => p.PriceCurrencyId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ---- Exchange Rate ----
-        modelBuilder.Entity<ExchangeRate>(b =>
-        {
-            b.Property(x => x.FromCurrency)
-                .HasConversion<string>()
-                .HasMaxLength(3);
-
-            b.Property(x => x.ToCurrency)
-                .HasConversion<string>()
-                .HasMaxLength(3);
-
-            b.Property(x => x.EffectiveDate).HasColumnType("date");
-
-            b.HasIndex(x => new { x.FromCurrency, x.ToCurrency, x.EffectiveDate });
-        });
+        // (No ExchangeRate entity anymore)
+        // If you want, you can add mapping for PriceCurrency dates etc., but not required.
     }
 }

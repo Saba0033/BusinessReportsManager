@@ -1,5 +1,5 @@
+using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs;
-using BusinessReportsManager.Application.Services;
 using BusinessReportsManager.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

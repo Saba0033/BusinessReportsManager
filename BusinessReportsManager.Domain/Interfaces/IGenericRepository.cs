@@ -1,25 +1,21 @@
+using System.Linq.Expressions;
 using BusinessReportsManager.Domain.Entities;
 
 namespace BusinessReportsManager.Domain.Interfaces;
 
-public interface IGenericRepository
+public interface IGenericRepository<T> where T : BaseEntity
 {
-    
-    IQueryable<T> Query<T>(bool asNoTracking = true) where T : BaseEntity;
-    
-    Task<T?> GetByIdAsync<T>(Guid id, CancellationToken ct = default) where T : BaseEntity;
-    
-    Task AddAsync<T>(T entity, CancellationToken ct = default) where T : BaseEntity;
-    
-    Task AddRangeAsync<T>(IEnumerable<T> entities, CancellationToken ct = default) where T : BaseEntity;
-    
-    Task Update<T>(T entity) where T : BaseEntity;
-    
-    Task Remove<T>(T entity) where T : BaseEntity;
-    
-    Task RemoveRange<T>(IEnumerable<T> entities) where T : BaseEntity;
-    
-    Task<int> SaveChangesAsync(CancellationToken ct = default);
-    
-    Task SetOriginalRowVersion<T>(T entity, byte[] rowVersion) where T : BaseEntity;
+    IQueryable<T> Query(Expression<Func<T, bool>>? filter = null,
+        bool asNoTracking = true);
+
+    Task<T?> GetByIdAsync(Guid id);
+
+    Task AddAsync(T entity);
+    Task AddRangeAsync(IEnumerable<T> entities);
+
+    Task UpdateAsync(T entity);
+    Task RemoveAsync(T entity);
+    Task RemoveRangeAsync(IEnumerable<T> entities);
+
+    Task<int> SaveChangesAsync();
 }
