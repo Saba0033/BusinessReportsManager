@@ -2,7 +2,7 @@ using System.Text;
 using AutoMapper;
 using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.Common;
-using BusinessReportsManager.Application.Validation;
+using BusinessReportsManager.Application.Mappings;
 using BusinessReportsManager.Domain.Interfaces;
 using BusinessReportsManager.Infrastructure.DataAccess;
 using BusinessReportsManager.Infrastructure.DataAccess.Seeders;
@@ -18,23 +18,16 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
 
-// ✅ Force Development environment (for local debugging, e.g., Rider)
-
+// Force Development environment
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
 var builder = WebApplication.CreateBuilder(args);
 builder.Environment.EnvironmentName = "Development";
 
-// -------------------- Services Configuration --------------------
-
-// Controllers + Filters
-builder.Services.AddControllers(options =>
-{
-    // options.Filters.Add<ConcurrencyExceptionFilter>();
-}).AddNewtonsoftJson();
-
+// Controllers
+builder.Services.AddControllers().AddNewtonsoftJson();
 builder.Services.AddProblemDetails();
 
-// Database Context
+// Database
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(
@@ -48,7 +41,7 @@ builder.Services.AddIdentity<AppUser, IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
-// JWT Authentication
+// JWT
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var key = Encoding.UTF8.GetBytes(jwtSection["Key"] ?? "THIS_IS_A_DEMO_SECRET_CHANGE_ME");
 
@@ -81,14 +74,15 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AppPolicies.CanEditOwnOpenOrders, p => p.RequireRole("Employee"));
 });
 
-// Validation
+// FluentValidation
 builder.Services.AddFluentValidationAutoValidation();
-builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderDtoValidator>();
+// builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderDtoValidator>();
 
-// ✅ AutoMapper (fixes IMapper dependency issues)
-builder.Services.AddAutoMapper(cfg => { /* optional config here */ }, typeof(Program).Assembly);
+// ✅ AutoMapper — FIXED
+// This scans ALL assemblies including your Application project where AppProfile exists.
+// builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
-// Swagger configuration
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -99,62 +93,64 @@ builder.Services.AddSwaggerGen(c =>
         Description = "API documentation for Business Reports Manager system"
     });
 
-    // Include XML comments (optional)
     var xmlFiles = Directory.GetFiles(AppContext.BaseDirectory, "*.xml", SearchOption.TopDirectoryOnly);
     foreach (var xml in xmlFiles)
         c.IncludeXmlComments(xml, includeControllerXmlComments: true);
 
-    // Add example filters
     c.ExampleFilters();
 
-    // JWT Security Scheme
     var securityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
+        Type = SecuritySchemeType.ApiKey,
         In = ParameterLocation.Header,
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\""
+        Scheme = "Bearer",
+        Description = "Enter - Bearer {token}"
     };
 
     c.AddSecurityDefinition("Bearer", securityScheme);
+
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
-{
     {
-        new OpenApiSecurityScheme
         {
-            Reference = new OpenApiReference
+            new OpenApiSecurityScheme
             {
-                Type = ReferenceType.SecurityScheme,
-                Id = "Bearer"
-            }
-        },
-        Array.Empty<string>()
-    }
-});
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
-// Swagger example providers
 builder.Services.AddSwaggerExamplesFromAssemblies(AppDomain.CurrentDomain.GetAssemblies());
 
-// HTTP context accessor
+// HTTP Context
 builder.Services.AddHttpContextAccessor();
 
-// Application Services
-builder.Services.AddScoped<IGenericRepository, GenericRepository>();
+
+
+builder.Services.AddSwaggerExamplesFromAssemblies(AppDomain.CurrentDomain.GetAssemblies());
+
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<ITourService, TourService>();
+
+builder.Services.AddAutoMapper(typeof(AppProfile));
+
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IOrderService, OrderService>();
-builder.Services.AddScoped<ISupplierService, SupplierService>();
-builder.Services.AddScoped<IBankService, BankService>();
-builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
-builder.Services.AddScoped<ITourService, TourService>();
-builder.Services.AddScoped<IOrderPartyService, OrderPartyService>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-builder.Services.AddScoped<BusinessReportsManager.Domain.Interfaces.IOrderNumberGenerator, OrderNumberGenerator>();
 
-// -------------------- App Pipeline --------------------
+// -------------------- Pipeline --------------------
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -166,15 +162,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "BusinessReportsManager API v1");
-        c.RoutePrefix = string.Empty; // Swagger at root URL
-    });
-}
-else
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "BusinessReportsManager API v1");
+        c.RoutePrefix = string.Empty;
     });
 }
 
@@ -183,7 +171,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Database migration + seeding
+// Migration & Seeding
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

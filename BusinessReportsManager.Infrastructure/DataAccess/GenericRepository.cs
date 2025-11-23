@@ -1,66 +1,70 @@
+using System.Linq.Expressions;
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessReportsManager.Infrastructure.DataAccess;
 
-
-public class GenericRepository : IGenericRepository
+public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
 {
     private readonly AppDbContext _context;
+    private readonly DbSet<T> _db;
 
     public GenericRepository(AppDbContext context)
     {
         _context = context;
+        _db = context.Set<T>();
     }
 
-    public IQueryable<T> Query<T>(bool asNoTracking = true) where T : BaseEntity
+    public IQueryable<T> Query(Expression<Func<T, bool>>? filter = null,
+        bool asNoTracking = true)
     {
-        var query = _context.Set<T>().AsQueryable();
-        return asNoTracking ? query.AsNoTracking() : query;
+        IQueryable<T> q = _db;
+
+        if (filter != null)
+            q = q.Where(filter);
+
+        if (asNoTracking)
+            q = q.AsNoTracking();
+
+        return q;
     }
 
-    public async Task<T?> GetByIdAsync<T>(Guid id, CancellationToken ct = default) where T : BaseEntity
+    public async Task<T?> GetByIdAsync(Guid id)
     {
-        return await _context.Set<T>().FindAsync(new object[] { id }, ct);
+        return await _db.FirstOrDefaultAsync(x => x.Id == id);
     }
 
-    public async Task AddAsync<T>(T entity, CancellationToken ct = default) where T : BaseEntity
+    public async Task AddAsync(T entity)
     {
-        await _context.Set<T>().AddAsync(entity, ct);
+        await _db.AddAsync(entity);
     }
 
-    public async Task AddRangeAsync<T>(IEnumerable<T> entities, CancellationToken ct = default) where T : BaseEntity
+    public async Task AddRangeAsync(IEnumerable<T> entities)
     {
-        await _context.Set<T>().AddRangeAsync(entities, ct);
+        await _db.AddRangeAsync(entities);
     }
 
-    public Task Update<T>(T entity) where T : BaseEntity
+    public Task UpdateAsync(T entity)
     {
-        _context.Set<T>().Update(entity);
+        _db.Update(entity);
         return Task.CompletedTask;
     }
 
-    public Task Remove<T>(T entity) where T : BaseEntity
+    public Task RemoveAsync(T entity)
     {
-        _context.Set<T>().Remove(entity);
+        _db.Remove(entity);
         return Task.CompletedTask;
     }
 
-    public Task RemoveRange<T>(IEnumerable<T> entities) where T : BaseEntity
+    public Task RemoveRangeAsync(IEnumerable<T> entities)
     {
-        _context.Set<T>().RemoveRange(entities);
+        _db.RemoveRange(entities);
         return Task.CompletedTask;
     }
 
-    public async Task<int> SaveChangesAsync(CancellationToken ct = default)
+    public async Task<int> SaveChangesAsync()
     {
-        return await _context.SaveChangesAsync(ct);
-    }
-
-    public Task SetOriginalRowVersion<T>(T entity, byte[] rowVersion) where T : BaseEntity
-    {
-        _context.Entry(entity).OriginalValues["RowVersion"] = rowVersion;
-        return Task.CompletedTask;
+        return await _context.SaveChangesAsync();
     }
 }

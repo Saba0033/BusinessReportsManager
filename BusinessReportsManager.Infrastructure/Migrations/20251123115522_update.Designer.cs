@@ -3,6 +3,7 @@ using System;
 using BusinessReportsManager.Infrastructure.DataAccess;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BusinessReportsManager.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251123115522_update")]
+    partial class update
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -28,37 +31,22 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("CityFrom")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("CityTo")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("CountryFrom")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("CountryTo")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FlightCompanyName")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<DateOnly>("FlightDate")
                         .HasColumnType("date");
 
-                    b.Property<Guid>("PriceCurrencyId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("From")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
+                    b.Property<string>("Pnr")
+                        .HasColumnType("text");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<Guid>("TourId")
                         .HasColumnType("uuid");
@@ -68,11 +56,76 @@ namespace BusinessReportsManager.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PriceCurrencyId");
-
                     b.HasIndex("TourId");
 
                     b.ToTable("AirTickets");
+                });
+
+            modelBuilder.Entity("BusinessReportsManager.Domain.Entities.Destination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TourId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TourId");
+
+                    b.ToTable("Destinations");
+                });
+
+            modelBuilder.Entity("BusinessReportsManager.Domain.Entities.ExchangeRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("FromCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<decimal>("Rate")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("ToCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromCurrency", "ToCurrency", "EffectiveDate");
+
+                    b.ToTable("ExchangeRates");
                 });
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.ExtraService", b =>
@@ -88,9 +141,6 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("PriceCurrencyId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("TourId")
                         .HasColumnType("uuid");
 
@@ -98,8 +148,6 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("PriceCurrencyId");
 
                     b.HasIndex("TourId");
 
@@ -118,15 +166,15 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                     b.Property<DateOnly>("CheckOut")
                         .HasColumnType("date");
 
+                    b.Property<string>("ConfirmationNumber")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("HotelName")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<Guid>("PriceCurrencyId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid>("TourId")
                         .HasColumnType("uuid");
@@ -135,8 +183,6 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("PriceCurrencyId");
 
                     b.HasIndex("TourId");
 
@@ -159,8 +205,13 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                     b.Property<Guid>("OrderPartyId")
                         .HasColumnType("uuid");
 
-                    b.Property<decimal>("SellPriceInGel")
-                        .HasColumnType("numeric(18,2)");
+                    b.Property<string>("OwnedByUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsRequired()
+                        .HasColumnType("bytea");
 
                     b.Property<string>("Source")
                         .IsRequired()
@@ -245,11 +296,14 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("TourId")
+                    b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
@@ -257,7 +311,7 @@ namespace BusinessReportsManager.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TourId");
+                    b.HasIndex("OrderId");
 
                     b.ToTable("Passengers");
                 });
@@ -280,9 +334,6 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                     b.Property<DateOnly>("PaidDate")
                         .HasColumnType("date");
 
-                    b.Property<Guid>("PriceCurrencyId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Reference")
                         .HasColumnType("text");
 
@@ -293,38 +344,7 @@ namespace BusinessReportsManager.Infrastructure.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.HasIndex("PriceCurrencyId");
-
                     b.ToTable("Payments");
-                });
-
-            modelBuilder.Entity("BusinessReportsManager.Domain.Entities.PriceCurrency", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Currency")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly>("EffectiveDate")
-                        .HasColumnType("date");
-
-                    b.Property<decimal?>("ExchangeRateToGel")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PriceCurrencies");
                 });
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.Supplier", b =>
@@ -344,6 +364,9 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Phone")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TaxId")
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
@@ -625,57 +648,44 @@ namespace BusinessReportsManager.Infrastructure.Migrations
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.AirTicket", b =>
                 {
-                    b.HasOne("BusinessReportsManager.Domain.Entities.PriceCurrency", "PriceCurrency")
-                        .WithMany()
-                        .HasForeignKey("PriceCurrencyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("BusinessReportsManager.Domain.Entities.Tour", "Tour")
                         .WithMany("AirTickets")
                         .HasForeignKey("TourId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("PriceCurrency");
+                    b.Navigation("Tour");
+                });
+
+            modelBuilder.Entity("BusinessReportsManager.Domain.Entities.Destination", b =>
+                {
+                    b.HasOne("BusinessReportsManager.Domain.Entities.Tour", "Tour")
+                        .WithMany("Destinations")
+                        .HasForeignKey("TourId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Tour");
                 });
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.ExtraService", b =>
                 {
-                    b.HasOne("BusinessReportsManager.Domain.Entities.PriceCurrency", "PriceCurrency")
-                        .WithMany()
-                        .HasForeignKey("PriceCurrencyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("BusinessReportsManager.Domain.Entities.Tour", "Tour")
                         .WithMany("ExtraServices")
                         .HasForeignKey("TourId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("PriceCurrency");
-
                     b.Navigation("Tour");
                 });
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.HotelBooking", b =>
                 {
-                    b.HasOne("BusinessReportsManager.Domain.Entities.PriceCurrency", "PriceCurrency")
-                        .WithMany()
-                        .HasForeignKey("PriceCurrencyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("BusinessReportsManager.Domain.Entities.Tour", "Tour")
                         .WithMany("HotelBookings")
                         .HasForeignKey("TourId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("PriceCurrency");
 
                     b.Navigation("Tour");
                 });
@@ -694,20 +704,68 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.OwnsOne("BusinessReportsManager.Domain.ValueObjects.Money", "SellPrice", b1 =>
+                        {
+                            b1.Property<Guid>("OrderId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<decimal>("Amount")
+                                .HasColumnType("numeric(18,2)");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)");
+
+                            b1.HasKey("OrderId");
+
+                            b1.ToTable("Orders");
+
+                            b1.WithOwner()
+                                .HasForeignKey("OrderId");
+                        });
+
+                    b.OwnsOne("BusinessReportsManager.Domain.ValueObjects.Money", "TicketSelfCost", b1 =>
+                        {
+                            b1.Property<Guid>("OrderId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<decimal>("Amount")
+                                .HasColumnType("numeric(18,2)");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)");
+
+                            b1.HasKey("OrderId");
+
+                            b1.ToTable("Orders");
+
+                            b1.WithOwner()
+                                .HasForeignKey("OrderId");
+                        });
+
                     b.Navigation("OrderParty");
+
+                    b.Navigation("SellPrice")
+                        .IsRequired();
+
+                    b.Navigation("TicketSelfCost")
+                        .IsRequired();
 
                     b.Navigation("Tour");
                 });
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.Passenger", b =>
                 {
-                    b.HasOne("BusinessReportsManager.Domain.Entities.Tour", "Tour")
+                    b.HasOne("BusinessReportsManager.Domain.Entities.Order", "Order")
                         .WithMany("Passengers")
-                        .HasForeignKey("TourId")
+                        .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Tour");
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.Payment", b =>
@@ -718,15 +776,31 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("BusinessReportsManager.Domain.Entities.PriceCurrency", "PriceCurrency")
-                        .WithMany()
-                        .HasForeignKey("PriceCurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                    b.OwnsOne("BusinessReportsManager.Domain.ValueObjects.Money", "Amount", b1 =>
+                        {
+                            b1.Property<Guid>("PaymentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<decimal>("Amount")
+                                .HasColumnType("numeric(18,2)");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)");
+
+                            b1.HasKey("PaymentId");
+
+                            b1.ToTable("Payments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PaymentId");
+                        });
+
+                    b.Navigation("Amount")
                         .IsRequired();
 
                     b.Navigation("Order");
-
-                    b.Navigation("PriceCurrency");
                 });
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.Tour", b =>
@@ -793,6 +867,8 @@ namespace BusinessReportsManager.Infrastructure.Migrations
 
             modelBuilder.Entity("BusinessReportsManager.Domain.Entities.Order", b =>
                 {
+                    b.Navigation("Passengers");
+
                     b.Navigation("Payments");
                 });
 
@@ -805,11 +881,11 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                 {
                     b.Navigation("AirTickets");
 
+                    b.Navigation("Destinations");
+
                     b.Navigation("ExtraServices");
 
                     b.Navigation("HotelBookings");
-
-                    b.Navigation("Passengers");
                 });
 #pragma warning restore 612, 618
         }

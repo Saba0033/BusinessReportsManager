@@ -1,94 +1,81 @@
-using BusinessReportsManager.Application.Common;
-using BusinessReportsManager.Application.DTOs;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 using BusinessReportsManager.Application.AbstractServices;
-using Swashbuckle.AspNetCore.Annotations;
-using Swashbuckle.AspNetCore.Filters;
+using Microsoft.AspNetCore.Mvc;
+using BusinessReportsManager.Application.DTOs;
+using BusinessReportsManager.Domain.Enums;
+using BusinessReportsManager.Domain.Interfaces;
 
 namespace BusinessReportsManager.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-[Authorize]
-public class OrdersController : ControllerBase
+[Route("api/orders")]
+public class OrderController : ControllerBase
 {
-    private readonly IOrderService _orders;
-    private readonly IHttpContextAccessor _http;
+    private readonly IOrderService _service;
 
-    public OrdersController(IOrderService orders, IHttpContextAccessor http)
+    public OrderController(IOrderService service)
     {
-        _orders = orders;
-        _http = http;
-    }
-
-    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-    private bool CanViewAll => User.IsInRole("Accountant") || User.IsInRole("Supervisor");
-    private bool CanEditAll => User.IsInRole("Accountant") || User.IsInRole("Supervisor");
-
-    [HttpPost]
-    // [SwaggerOperation(Summary = "Create order", Description = "Auto-generates OrderNumber.")]
-    [SwaggerRequestExample(typeof(CreateOrderDto), typeof(BusinessReportsManager.Api.Extensions.CreateOrderExample))]
-    public async Task<ActionResult<Guid>> Create([FromBody] CreateOrderDto dto, CancellationToken ct)
-    {
-        var id = await _orders.CreateAsync(dto, UserId, ct);
-        return CreatedAtAction(nameof(GetById), new { id }, id);
+        _service = service;
     }
 
     [HttpGet]
-    // [SwaggerOperation(Summary = "List orders (paged)", Description = "Employees see their own orders; Accountant/Supervisor can view all.")]
-    public async Task<ActionResult<PagedResult<OrderListItemDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
-    {
-        var result = await _orders.GetPagedAsync(new PagedRequest(page, pageSize), UserId, CanViewAll, ct);
-        return Ok(result);
-    }
+    public async Task<IActionResult> GetAll() =>
+        Ok(await _service.GetAllAsync());
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<OrderDetailsDto>> GetById([FromRoute] Guid id, CancellationToken ct)
+    public async Task<IActionResult> Get(Guid id)
     {
-        var dto = await _orders.GetAsync(id, UserId, CanViewAll, ct);
-        return dto is null ? NotFound() : Ok(dto);
+        var result = await _service.GetByIdAsync(id);
+        return result == null ? NotFound() : Ok(result);
     }
+
+    [HttpGet("status/{status}")]
+    public async Task<IActionResult> GetByStatus(OrderStatus status) =>
+        Ok(await _service.GetByStatusAsync(status));
+
+    [HttpGet("party/{partyId:guid}")]
+    public async Task<IActionResult> GetByParty(Guid partyId) =>
+        Ok(await _service.GetByPartyAsync(partyId));
+
+    [HttpGet("dates")]
+    public async Task<IActionResult> GetByDates(DateTime start, DateTime end) =>
+        Ok(await _service.GetByDateRangeAsync(start, end));
+
+    [HttpPost]
+    public async Task<IActionResult> Create(OrderCreateDto dto) =>
+        Ok(await _service.CreateFullOrderAsync(dto));
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Employee,Accountant,Supervisor")]
-    public async Task<ActionResult> Update([FromRoute] Guid id, [FromBody] UpdateOrderDto dto, CancellationToken ct)
+    public async Task<IActionResult> Edit(Guid id, OrderEditDto dto)
     {
-        await _orders.UpdateAsync(id, dto, UserId, CanEditAll, ct);
-        return NoContent();
+        var result = await _service.EditOrderAsync(id, dto);
+        return result == null ? NotFound() : Ok(result);
     }
 
-    [HttpPost("{id:guid}/finalize")]
-    [Authorize(Roles = "Accountant,Supervisor")]
-    public async Task<ActionResult> Finalize([FromRoute] Guid id, CancellationToken ct)
+    [HttpPatch("{id:guid}/status")]
+    public async Task<IActionResult> ChangeStatus(Guid id, OrderStatus status)
     {
-        await _orders.FinalizeAsync(id, ct);
-        return NoContent();
+        var success = await _service.ChangeStatusAsync(id, status);
+        return success ? Ok() : NotFound();
     }
 
-    [HttpPost("{id:guid}/reopen")]
-    [Authorize(Roles = "Supervisor")]
-    public async Task<ActionResult> Reopen([FromRoute] Guid id, CancellationToken ct)
+    [HttpPost("{id:guid}/payment")]
+    public async Task<IActionResult> AddPayment(Guid id, PaymentCreateDto dto)
     {
-        await _orders.ReopenAsync(id, ct);
-        return NoContent();
+        var payment = await _service.AddPaymentAsync(id, dto);
+        return payment == null ? NotFound() : Ok(payment);
     }
 
-    [HttpPost("{id:guid}/passengers")]
-    [Authorize(Roles = "Employee,Accountant,Supervisor")]
-    [SwaggerRequestExample(typeof(CreatePassengerDto), typeof(BusinessReportsManager.Api.Extensions.CreatePassengerExample))]
-    public async Task<ActionResult<PassengerDto>> AddPassenger([FromRoute] Guid id, [FromBody] CreatePassengerDto dto, CancellationToken ct)
+    [HttpDelete("payment/{paymentId:guid}")]
+    public async Task<IActionResult> RemovePayment(Guid paymentId)
     {
-        var result = await _orders.AddPassengerAsync(id, dto, UserId, CanEditAll, ct);
-        return Ok(result);
+        var result = await _service.RemovePaymentAsync(paymentId);
+        return result ? Ok() : NotFound();
     }
 
-    [HttpDelete("{id:guid}/passengers/{pid:guid}")]
-    [Authorize(Roles = "Employee,Accountant,Supervisor")]
-    public async Task<ActionResult> DeletePassenger([FromRoute] Guid id, [FromRoute] Guid pid, CancellationToken ct)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
-        await _orders.DeletePassengerAsync(id, pid, UserId, CanEditAll, ct);
-        return NoContent();
+        var result = await _service.DeleteOrderAsync(id);
+        return result ? Ok() : NotFound();
     }
 }

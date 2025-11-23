@@ -1,19 +1,21 @@
-using BusinessReportsManager.Application.Common;
 using BusinessReportsManager.Application.DTOs;
+using BusinessReportsManager.Domain.Enums;
 
 namespace BusinessReportsManager.Application.AbstractServices;
 
 public interface IOrderService
 {
-    Task<Guid> CreateAsync(CreateOrderDto dto, string userId, CancellationToken ct = default);
-    Task<OrderDetailsDto?> GetAsync(Guid id, string requesterUserId, bool canViewAll, CancellationToken ct = default);
-    Task<PagedResult<OrderListItemDto>> GetPagedAsync(PagedRequest request, string requesterUserId, bool canViewAll, CancellationToken ct = default);
-    Task UpdateAsync(Guid id, UpdateOrderDto dto, string requesterUserId, bool canEditAll, CancellationToken ct = default);
-    Task FinalizeAsync(Guid id, CancellationToken ct = default);
-    Task ReopenAsync(Guid id, CancellationToken ct = default);
-    Task<PassengerDto> AddPassengerAsync(Guid orderId, CreatePassengerDto dto, string requesterUserId, bool canEditAll, CancellationToken ct = default);
-    Task DeletePassengerAsync(Guid orderId, Guid passengerId, string requesterUserId, bool canEditAll, CancellationToken ct = default);
-    Task<IReadOnlyList<PaymentDto>> GetPaymentsAsync(Guid orderId, string requesterUserId, bool canViewAll, CancellationToken ct = default);
-    Task<PaymentDto> AddPaymentAsync(Guid orderId, CreatePaymentDto dto, string requesterUserId, bool canEditAll, CancellationToken ct = default);
-    Task DeletePaymentAsync(Guid orderId, Guid paymentId, string requesterUserId, bool canEditAll, CancellationToken ct = default);
+    Task<OrderDto> CreateFullOrderAsync(OrderCreateDto dto);
+    Task<OrderDto?> EditOrderAsync(Guid orderId, OrderEditDto dto);
+    Task<PaymentDto?> AddPaymentAsync(Guid orderId, PaymentCreateDto dto);
+    Task<bool> RemovePaymentAsync(Guid paymentId);
+    Task<bool> ChangeStatusAsync(Guid orderId, OrderStatus newStatus);
+    Task<bool> DeleteOrderAsync(Guid orderId);
+
+    Task<List<OrderDto>> GetAllAsync();
+    Task<OrderDto?> GetByIdAsync(Guid id);
+    Task<List<OrderDto>> GetByStatusAsync(OrderStatus status);
+    Task<List<OrderDto>> GetByPartyAsync(Guid orderPartyId);
+    Task<List<OrderDto>> GetByDateRangeAsync(DateTime start, DateTime end);
+    Task<decimal> GetTotalPaidAsync(Guid orderId);
 }
