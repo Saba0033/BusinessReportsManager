@@ -20,7 +20,9 @@ public class AppProfile : Profile
         CreateMap<CreatePersonPartyDto, PersonParty>();
         CreateMap<CreateCompanyPartyDto, CompanyParty>();
 
+
         // 3. Basic Entity Mappings
+
         CreateMap<Supplier, SupplierDto>();
         CreateMap<CreateSupplierDto, Supplier>();
         CreateMap<Bank, BankDto>();

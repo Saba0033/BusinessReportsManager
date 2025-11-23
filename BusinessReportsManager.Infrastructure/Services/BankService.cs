@@ -49,9 +49,10 @@ public class BankService : IBankService
 
     public async Task<IReadOnlyList<BankDto>> GetAllAsync(CancellationToken ct = default)
     {
-        return await _repo.Query<Bank>()
+        var k = await _repo.Query<Bank>()
             .OrderBy(x => x.Name)
             .ProjectTo<BankDto>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
+        return k;
     }
 }
