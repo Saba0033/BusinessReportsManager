@@ -13,9 +13,9 @@ public static class AppDbSeeder
         UserManager<AppUser> userManager,
         RoleManager<IdentityRole> roleManager)
     {
-        // ---------------------------------------------
-        // 1. Create Roles
-        // ---------------------------------------------
+        // ==========================================================
+        // 1. ROLES
+        // ==========================================================
         string[] roles = { "Employee", "Accountant", "Supervisor" };
 
         foreach (var role in roles)
@@ -24,165 +24,234 @@ public static class AppDbSeeder
                 await roleManager.CreateAsync(new IdentityRole(role));
         }
 
-        // ---------------------------------------------
-        // 2. Create Users (with real emails + safe password)
-        // ---------------------------------------------
-        async Task<AppUser> EnsureUser(string email, string role)
+        // ==========================================================
+        // 2. USERS
+        // ==========================================================
+        async Task EnsureUser(string email, string role)
         {
             var user = await userManager.FindByEmailAsync(email);
-
             if (user == null)
             {
-                user = new AppUser
-                {
-                    UserName = email,
-                    Email = email
-                };
-
-                // Use guaranteed-valid password
-                var create = await userManager.CreateAsync(user, "P@ssword1");
-
-                if (!create.Succeeded)
-                {
-                    throw new Exception(
-                        "User creation failed: " +
-                        string.Join(", ", create.Errors.Select(e => e.Description))
-                    );
-                }
+                user = new AppUser { Email = email, UserName = email };
+                await userManager.CreateAsync(user, "P@ssword1");
             }
 
-            // Add to role
             if (!await userManager.IsInRoleAsync(user, role))
-            {
-                var addRole = await userManager.AddToRoleAsync(user, role);
-
-                if (!addRole.Succeeded)
-                {
-                    throw new Exception(
-                        "AddToRole failed: " +
-                        string.Join(", ", addRole.Errors.Select(e => e.Description))
-                    );
-                }
-            }
-
-            return user;
+                await userManager.AddToRoleAsync(user, role);
         }
 
-        var employee = await EnsureUser("employee@demo.local", "Employee");
-        var accountant = await EnsureUser("accountant@demo.local", "Accountant");
-        var supervisor = await EnsureUser("supervisor@demo.local", "Supervisor");
+        await EnsureUser("employee@demo.local", "Employee");
+        await EnsureUser("accountant@demo.local", "Accountant");
+        await EnsureUser("supervisor@demo.local", "Supervisor");
 
-        // ---------------------------------------------
-        // 3. Suppliers
-        // ---------------------------------------------
-        if (!await db.Suppliers.AnyAsync())
+        // ==========================================================
+        // Prevent Duplicate SEED Runs
+        // ==========================================================
+        if (await db.Orders.AnyAsync())
+            return;
+
+        // ==========================================================
+        // 3. SUPPLIER
+        // ==========================================================
+        var supplier = new Supplier
         {
-            db.Suppliers.AddRange(
-                new Supplier { Name = "GeoTravel Supplier", ContactEmail = "contact@geotravel.local" },
-                new Supplier { Name = "Caucasus Tours", ContactEmail = "sales@caucasustours.local" }
-            );
+            Name = "GeoTravel Supplier",
+            ContactEmail = "info@geotravel.local",
+            Phone = "+995555123456"
+        };
+        db.Suppliers.Add(supplier);
+        await db.SaveChangesAsync();
 
-            await db.SaveChangesAsync();
-        }
-
-        // ---------------------------------------------
-        // 4. Order Party (Person)
-        // ---------------------------------------------
-        var party = await db.PersonParties.FirstOrDefaultAsync();
-        if (party == null)
+        // ==========================================================
+        // 4. ORDER PARTY (Person)
+        // ==========================================================
+        var party = new PersonParty
         {
-            party = new PersonParty
+            Email = "customer@demo.local",
+            Phone = "+995555987654",
+            FirstName = "Nino",
+            LastName = "Beridze",
+            BirthDate = new DateOnly(1990, 1, 1)
+        };
+        db.PersonParties.Add(party);
+        await db.SaveChangesAsync();
+
+        // ==========================================================
+        // 5. TOUR (with all children)
+        // ==========================================================
+        var tour = new Tour
+        {
+            Name = "Georgia Golden Tour (Tbilisi + Batumi + Kutaisi)",
+            StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
+            EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(17)),
+            PassengerCount = 2,
+            TourSupplier = supplier
+        };
+        db.Tours.Add(tour);
+        await db.SaveChangesAsync();
+
+        // -------- Passengers --------
+        db.Passengers.AddRange(
+            new Passenger
             {
-                Email = "customer@demo.local",
+                TourId = tour.Id,
                 FirstName = "Nino",
                 LastName = "Beridze",
-                BirthDate = new DateOnly(1990, 1, 1)
-            };
-
-            db.PersonParties.Add(party);
-            await db.SaveChangesAsync();
-        }
-
-        // ---------------------------------------------
-        // 5. Create Tour + Passengers
-        // ---------------------------------------------
-        var tour = await db.Tours.Include(t => t.Passengers).FirstOrDefaultAsync();
-        if (tour == null)
-        {
-            var supplier = await db.Suppliers.FirstAsync();
-
-            tour = new Tour
+                BirthDate = new DateOnly(1990, 1, 1),
+                DocumentNumber = "AB1234567"
+            },
+            new Passenger
             {
-                Name = "Tbilisi & Batumi Highlights",
-                StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
-                EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(17)),
-                PassengerCount = 2,
-                TourSupplierId = supplier.Id
-            };
-
-            db.Tours.Add(tour);
-            await db.SaveChangesAsync(); // IMPORTANT: Must save before passengers
-
-            db.Passengers.AddRange(
-                new Passenger
-                {
-                    TourId = tour.Id,
-                    FirstName = "Nino",
-                    LastName = "Beridze",
-                    BirthDate = new DateOnly(1990, 1, 1)
-                },
-                new Passenger
-                {
-                    TourId = tour.Id,
-                    FirstName = "Giorgi",
-                    LastName = "Beridze"
-                }
-            );
-
-            await db.SaveChangesAsync();
-        }
-
-        // ---------------------------------------------
-        // 6. Order + Payment
-        // ---------------------------------------------
-        if (!await db.Orders.AnyAsync())
-        {
-            var order = new Order
-            {
-                OrderNumber = $"ORD-{DateTime.UtcNow.Year}-0001",
-                OrderPartyId = party.Id,
                 TourId = tour.Id,
-                Source = "Seed",
-                SellPriceInGel = 1000m,
-                Status = OrderStatus.Open
-            };
+                FirstName = "Giorgi",
+                LastName = "Beridze",
+                BirthDate = new DateOnly(2010, 5, 10),
+                DocumentNumber = "CD8910111"
+            }
+        );
 
-            db.Orders.Add(order);
-            await db.SaveChangesAsync();
+        // -------- Air Tickets --------
+        var ticketPrice1 = new PriceCurrency
+        {
+            Currency = Currency.USD,
+            Amount = 250,
+            ExchangeRateToGel = 2.7m,
+            EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        db.PriceCurrencies.Add(ticketPrice1);
 
-            // Currency
-            var curr = new PriceCurrency
-            {
-                Currency = Currency.GEL,
-                Amount = 300m,
-                ExchangeRateToGel = 1m,
-                EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
-            };
+        var ticket1 = new AirTicket
+        {
+            TourId = tour.Id,
+            CountryFrom = "Georgia",
+            CountryTo = "Turkey",
+            CityFrom = "Tbilisi",
+            CityTo = "Istanbul",
+            FlightDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
+            FlightCompanyName = "Turkish Airlines",
+            Quantity = 2,
+            PriceCurrency = ticketPrice1
+        };
+        db.AirTickets.Add(ticket1);
 
-            db.PriceCurrencies.Add(curr);
-            await db.SaveChangesAsync();
+        var ticketPrice2 = new PriceCurrency
+        {
+            Currency = Currency.USD,
+            Amount = 300,
+            ExchangeRateToGel = 2.7m,
+            EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        db.PriceCurrencies.Add(ticketPrice2);
 
-            // Payment
-            db.Payments.Add(new Payment
-            {
-                OrderId = order.Id,
-                PriceCurrencyId = curr.Id,
-                BankName = "TBC",
-                PaidDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Reference = "Advance"
-            });
+        var ticket2 = new AirTicket
+        {
+            TourId = tour.Id,
+            CountryFrom = "Turkey",
+            CountryTo = "Georgia",
+            CityFrom = "Istanbul",
+            CityTo = "Batumi",
+            FlightDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(17)),
+            FlightCompanyName = "Turkish Airlines",
+            Quantity = 2,
+            PriceCurrency = ticketPrice2
+        };
+        db.AirTickets.Add(ticket2);
 
-            await db.SaveChangesAsync();
-        }
+        // -------- Hotel Booking --------
+        var hotelPrice = new PriceCurrency
+        {
+            Currency = Currency.USD,
+            Amount = 450,
+            ExchangeRateToGel = 2.7m,
+            EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        db.PriceCurrencies.Add(hotelPrice);
+
+        var hotel = new HotelBooking
+        {
+            TourId = tour.Id,
+            HotelName = "Radisson Blu Batumi",
+            CheckIn = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(11)),
+            CheckOut = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            PriceCurrency = hotelPrice
+        };
+        db.HotelBookings.Add(hotel);
+
+        // -------- Extra Service --------
+        var extraPrice = new PriceCurrency
+        {
+            Currency = Currency.GEL,
+            Amount = 120,
+            ExchangeRateToGel = 1m,
+            EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        db.PriceCurrencies.Add(extraPrice);
+
+        var extra = new ExtraService
+        {
+            TourId = tour.Id,
+            Description = "Airport pickup",
+            PriceCurrency = extraPrice
+        };
+        db.ExtraServices.Add(extra);
+
+        await db.SaveChangesAsync();
+
+        // ==========================================================
+        // 6. ORDER
+        // ==========================================================
+        var order = new Order
+        {
+            OrderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-0001",
+            OrderParty = party,
+            Tour = tour,
+            Source = "SeedData",
+            SellPriceInGel = 3000m,
+            Status = OrderStatus.Open
+        };
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+
+        // ==========================================================
+        // 7. PAYMENTS (NEW MODEL)
+        // ==========================================================
+
+        // Payment 1
+        var payPrice1 = new PriceCurrency
+        {
+            Currency = Currency.GEL,
+            Amount = 500,
+            ExchangeRateToGel = 1m,
+            EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        db.PriceCurrencies.Add(payPrice1);
+
+        db.Payments.Add(new Payment
+        {
+            OrderId = order.Id,
+            PriceCurrency = payPrice1,
+            BankName = "TBC",
+            PaidDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        });
+
+        // Payment 2
+        var payPrice2 = new PriceCurrency
+        {
+            Currency = Currency.USD,
+            Amount = 300,
+            ExchangeRateToGel = 2.7m,
+            EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        db.PriceCurrencies.Add(payPrice2);
+
+        db.Payments.Add(new Payment
+        {
+            OrderId = order.Id,
+            PriceCurrency = payPrice2,
+            BankName = "BOG",
+            PaidDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        });
+
+        await db.SaveChangesAsync();
     }
 }

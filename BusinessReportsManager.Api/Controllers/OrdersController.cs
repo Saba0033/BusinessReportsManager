@@ -1,81 +1,124 @@
 using BusinessReportsManager.Application.AbstractServices;
-using Microsoft.AspNetCore.Mvc;
-using BusinessReportsManager.Application.DTOs;
+using BusinessReportsManager.Application.DTOs.Order;
+using BusinessReportsManager.Application.DTOs.Payment;
 using BusinessReportsManager.Domain.Enums;
-using BusinessReportsManager.Domain.Interfaces;
+using Microsoft.AspNetCore.Mvc;
 
-namespace BusinessReportsManager.Api.Controllers;
+namespace BusinessReportsManager.API.Controllers;
 
 [ApiController]
 [Route("api/orders")]
 public class OrderController : ControllerBase
 {
-    private readonly IOrderService _service;
+    private readonly IOrderService _orders;
+    private readonly IPaymentService _payments;
 
-    public OrderController(IOrderService service)
+    public OrderController(IOrderService orders, IPaymentService payments)
     {
-        _service = service;
+        _orders = orders;
+        _payments = payments;
     }
 
-    [HttpGet]
-    public async Task<IActionResult> GetAll() =>
-        Ok(await _service.GetAllAsync());
-
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id)
-    {
-        var result = await _service.GetByIdAsync(id);
-        return result == null ? NotFound() : Ok(result);
-    }
-
-    [HttpGet("status/{status}")]
-    public async Task<IActionResult> GetByStatus(OrderStatus status) =>
-        Ok(await _service.GetByStatusAsync(status));
-
-    [HttpGet("party/{partyId:guid}")]
-    public async Task<IActionResult> GetByParty(Guid partyId) =>
-        Ok(await _service.GetByPartyAsync(partyId));
-
-    [HttpGet("dates")]
-    public async Task<IActionResult> GetByDates(DateTime start, DateTime end) =>
-        Ok(await _service.GetByDateRangeAsync(start, end));
-
+    /// <summary>
+    /// Creates a new order with party, tour, passengers, services, and payments.
+    /// </summary>
     [HttpPost]
-    public async Task<IActionResult> Create(OrderCreateDto dto) =>
-        Ok(await _service.CreateFullOrderAsync(dto));
-
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Edit(Guid id, OrderEditDto dto)
+    [ProducesResponseType(typeof(OrderDto), 201)]
+    public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
     {
-        var result = await _service.EditOrderAsync(id, dto);
-        return result == null ? NotFound() : Ok(result);
+        var result = await _orders.CreateFullOrderAsync(dto);
+        return CreatedAtAction(nameof(GetById), new { orderId = result.Id }, result);
     }
 
-    [HttpPatch("{id:guid}/status")]
-    public async Task<IActionResult> ChangeStatus(Guid id, OrderStatus status)
+    /// <summary>
+    /// Updates an existing order by fully replacing its nested structure,
+    /// including passengers, tickets, hotel bookings, extra services, and payments.
+    /// </summary>
+    [HttpPut("{orderId:guid}")]
+    [ProducesResponseType(typeof(OrderDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Edit(Guid orderId, [FromBody] OrderEditDto dto)
     {
-        var success = await _service.ChangeStatusAsync(id, status);
-        return success ? Ok() : NotFound();
+        var result = await _orders.EditOrderAsync(orderId, dto);
+        return result is null ? NotFound() : Ok(result);
     }
 
-    [HttpPost("{id:guid}/payment")]
-    public async Task<IActionResult> AddPayment(Guid id, PaymentCreateDto dto)
+    /// <summary>
+    /// Retrieves all orders with full nested details.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    public async Task<IActionResult> GetAll()
     {
-        var payment = await _service.AddPaymentAsync(id, dto);
-        return payment == null ? NotFound() : Ok(payment);
+        return Ok(await _orders.GetAllAsync());
     }
 
-    [HttpDelete("payment/{paymentId:guid}")]
-    public async Task<IActionResult> RemovePayment(Guid paymentId)
+    /// <summary>
+    /// Retrieves a single order by ID.
+    /// </summary>
+    [HttpGet("{orderId:guid}")]
+    [ProducesResponseType(typeof(OrderDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetById(Guid orderId)
     {
-        var result = await _service.RemovePaymentAsync(paymentId);
-        return result ? Ok() : NotFound();
+        var result = await _orders.GetByIdAsync(orderId);
+        return result is null ? NotFound() : Ok(result);
     }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    /// <summary>
+    /// Retrieves all orders with a specific status.
+    /// </summary>
+    [HttpGet("status/{status}")]
+    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    public async Task<IActionResult> GetByStatus(OrderStatus status)
     {
-        var result = await _service.DeleteOrderAsync(id);
-        return result ? Ok() : NotFound();
+        return Ok(await _orders.GetByStatusAsync(status));
     }
+
+    /// <summary>
+    /// Retrieves all orders associated with a specific party.
+    /// </summary>
+    [HttpGet("party/{partyId:guid}")]
+    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    public async Task<IActionResult> GetByParty(Guid partyId)
+    {
+        return Ok(await _orders.GetByPartyAsync(partyId));
+    }
+
+    /// <summary>
+    /// Retrieves all orders created within a date range.
+    /// </summary>
+    [HttpGet("date-range")]
+    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    public async Task<IActionResult> GetByDateRange([FromQuery] DateTime start, [FromQuery] DateTime end)
+    {
+        return Ok(await _orders.GetByDateRangeAsync(start, end));
+    }
+    
+
+    /// <summary>
+    /// Changes the status of an order.
+    /// </summary>
+    [HttpPatch("{orderId:guid}/status")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ChangeStatus(Guid orderId, [FromQuery] OrderStatus status)
+    {
+        var success = await _orders.ChangeStatusAsync(orderId, status);
+        return success ? NoContent() : NotFound();
+    }
+
+    /// <summary>
+    /// Permanently deletes an order and all associated data.
+    /// </summary>
+    [HttpDelete("{orderId:guid}")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Delete(Guid orderId)
+    {
+        var success = await _orders.DeleteOrderAsync(orderId);
+        return success ? NoContent() : NotFound();
+    }
+
+
 }

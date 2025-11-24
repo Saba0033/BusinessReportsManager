@@ -1,4 +1,5 @@
 using BusinessReportsManager.Application.DTOs;
+using BusinessReportsManager.Application.DTOs.Tour;
 
 namespace BusinessReportsManager.Application.AbstractServices;
 

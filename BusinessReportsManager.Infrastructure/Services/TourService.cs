@@ -1,6 +1,7 @@
 using AutoMapper;
 using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs;
+using BusinessReportsManager.Application.DTOs.Tour;
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;

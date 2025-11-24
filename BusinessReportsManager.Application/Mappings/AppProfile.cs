@@ -1,5 +1,14 @@
 using AutoMapper;
-using BusinessReportsManager.Application.DTOs;
+using BusinessReportsManager.Application.DTOs.AirTicket;
+using BusinessReportsManager.Application.DTOs.ExtraService;
+using BusinessReportsManager.Application.DTOs.HotelBooking;
+using BusinessReportsManager.Application.DTOs.Order;
+using BusinessReportsManager.Application.DTOs.OrderParty;
+using BusinessReportsManager.Application.DTOs.Passenger;
+using BusinessReportsManager.Application.DTOs.Payment;
+using BusinessReportsManager.Application.DTOs.PriceCurrency;
+using BusinessReportsManager.Application.DTOs.Supplier;
+using BusinessReportsManager.Application.DTOs.Tour;
 using BusinessReportsManager.Domain.Entities;
 
 namespace BusinessReportsManager.Application.Mappings;
@@ -20,7 +29,6 @@ public class AppProfile : Profile
         CreateMap<PersonParty, PersonPartyDto>();
         CreateMap<CompanyParty, CompanyPartyDto>();
 
-        // Create mappings only if needed (usually manually created)
         CreateMap<PartyCreateDto, PersonParty>()
             .ForMember(d => d.FirstName, o => o.MapFrom(s => s.FirstName))
             .ForMember(d => d.LastName, o => o.MapFrom(s => s.LastName))
@@ -46,8 +54,13 @@ public class AppProfile : Profile
         // ======================================================
         // PAYMENT
         // ======================================================
+        // PaymentDto.Price ← Payment.PriceCurrency
         CreateMap<Payment, PaymentDto>()
             .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
+
+        // PaymentCreateDto.Price → PriceCurrency
+        CreateMap<PaymentCreateDto, Payment>()
+            .ForMember(d => d.PriceCurrency, o => o.Ignore());
 
         // ======================================================
         // AIR TICKET
