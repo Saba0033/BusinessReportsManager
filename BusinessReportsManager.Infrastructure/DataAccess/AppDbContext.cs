@@ -113,7 +113,13 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .WithOne(p => p.Order!)
                 .HasForeignKey(p => p.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            
+            b.Property(o => o.CreatedById)
+                .IsRequired()
+                .HasColumnType("text");
         });
+
 
         // ---- Passenger ----
         modelBuilder.Entity<Passenger>(b =>

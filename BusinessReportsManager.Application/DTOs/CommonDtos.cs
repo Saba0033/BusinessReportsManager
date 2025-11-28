@@ -13,6 +13,8 @@ using System.Collections.Generic;
 public class OrderDto
 {
     public Guid Id { get; set; }
+    public string CreatedById { get; set; } = default!;
+    public string CreatedByEmail { get; set; } = default!;
     public string OrderNumber { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public decimal SellPriceInGel { get; set; }
@@ -29,6 +31,8 @@ public class OrderCreateDto
 {
     public PartyCreateDto Party { get; set; } = null!;
     public TourCreateDto Tour { get; set; } = null!;
+    public string CreatedById { get; set; } = default!;
+    public string CreatedByEmail { get; set; } = default!;
 
     public string Source { get; set; } = string.Empty;
     public decimal SellPriceInGel { get; set; }

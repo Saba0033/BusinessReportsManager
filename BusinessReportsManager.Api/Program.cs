@@ -1,8 +1,8 @@
-using System.Text;
 using AutoMapper;
 using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.Common;
 using BusinessReportsManager.Application.Mappings;
+using BusinessReportsManager.Application.Validation;
 using BusinessReportsManager.Domain.Interfaces;
 using BusinessReportsManager.Infrastructure.DataAccess;
 using BusinessReportsManager.Infrastructure.DataAccess.Seeders;
@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
+using System.Text;
 
 // Force Development environment
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
@@ -149,6 +150,11 @@ builder.Services.AddAutoMapper(typeof(AppProfile));
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+
+builder.Services.AddValidatorsFromAssemblyContaining<OrderCreateDtoValidator>();
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddFluentValidationClientsideAdapters();
+
 
 // -------------------- Pipeline --------------------
 var app = builder.Build();

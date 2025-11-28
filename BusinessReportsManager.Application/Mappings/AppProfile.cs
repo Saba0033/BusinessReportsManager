@@ -100,6 +100,15 @@ public class AppProfile : Profile
             .ForMember(d => d.PersonParty, o => o.MapFrom(s => s.OrderParty as PersonParty))
             .ForMember(d => d.CompanyParty, o => o.MapFrom(s => s.OrderParty as CompanyParty))
             .ForMember(d => d.Tour, o => o.MapFrom(s => s.Tour))
-            .ForMember(d => d.Payments, o => o.MapFrom(s => s.Payments));
+            .ForMember(d => d.Payments, o => o.MapFrom(s => s.Payments))
+            .ForMember(d => d.CreatedById, o => o.MapFrom(s => s.CreatedById))
+            .ForMember(dest => dest.CreatedByEmail, opt => opt.MapFrom(src => src.CreatedByEmail));
+
+        CreateMap<OrderCreateDto, Order>()
+            .ForMember(d => d.CreatedById, o => o.Ignore());
+
+        CreateMap<OrderEditDto, Order>()
+            .ForMember(d => d.CreatedById, o => o.Ignore());
+
     }
 }

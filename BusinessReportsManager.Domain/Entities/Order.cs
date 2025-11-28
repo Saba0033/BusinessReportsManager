@@ -6,6 +6,8 @@ public class Order : BaseEntity
 {
     public string OrderNumber { get; set; } = string.Empty;
     public Guid OrderPartyId { get; set; }
+    public string CreatedById { get; set; } = default!;
+    public string CreatedByEmail { get; set; } = default!;
     public OrderParty? OrderParty { get; set; }
     public Guid TourId { get; set; }
     public Tour? Tour { get; set; }
