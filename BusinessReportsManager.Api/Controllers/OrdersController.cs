@@ -3,9 +3,12 @@ using BusinessReportsManager.Application.DTOs.Order;
 using BusinessReportsManager.Application.DTOs.Payment;
 using BusinessReportsManager.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace BusinessReportsManager.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/orders")]
 public class OrderController : ControllerBase
@@ -23,6 +26,7 @@ public class OrderController : ControllerBase
     /// Creates a new order with party, tour, passengers, services, and payments.
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "Supervisor,Employee")]
     [ProducesResponseType(typeof(OrderDto), 201)]
     public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
     {
@@ -100,6 +104,7 @@ public class OrderController : ControllerBase
     /// Changes the status of an order.
     /// </summary>
     [HttpPatch("{orderId:guid}/status")]
+    [Authorize(Roles = "Supervisor,Accountant")]
     [ProducesResponseType(204)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> ChangeStatus(Guid orderId, [FromQuery] OrderStatus status)
@@ -112,6 +117,7 @@ public class OrderController : ControllerBase
     /// Permanently deletes an order and all associated data.
     /// </summary>
     [HttpDelete("{orderId:guid}")]
+    [Authorize(Roles = "Supervisor")]
     [ProducesResponseType(204)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> Delete(Guid orderId)

@@ -25,15 +25,16 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var expiresMinutes = int.TryParse(jwtSection["ExpiresMinutes"], out var m) ? m : 120;
 
         var claims = new List<Claim>
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email ?? ""),
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Name, user.Email ?? ""),
-        };
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id),
+        new Claim(ClaimTypes.Email, user.Email ?? ""),
+        new Claim(ClaimTypes.Name, user.Email ?? "")
+    };
 
         foreach (var role in roles)
+        {
             claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var creds = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256);
         var expires = DateTime.UtcNow.AddMinutes(expiresMinutes);

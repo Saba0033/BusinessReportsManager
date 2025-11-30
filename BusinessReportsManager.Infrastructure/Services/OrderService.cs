@@ -6,7 +6,9 @@ using BusinessReportsManager.Application.DTOs.Payment;
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Enums;
 using BusinessReportsManager.Domain.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace BusinessReportsManager.Infrastructure.Services;
 
@@ -14,11 +16,14 @@ public class OrderService : IOrderService
 {
     private readonly IUnitOfWork _uow;
     private readonly IMapper _mapper;
+    private readonly IHttpContextAccessor _contextAccessor;
 
-    public OrderService(IUnitOfWork uow, IMapper mapper)
+
+    public OrderService(IUnitOfWork uow, IMapper mapper, IHttpContextAccessor contextAccessor)
     {
         _uow = uow;
         _mapper = mapper;
+        _contextAccessor = contextAccessor;
     }
 
     // ---------------------------------------------------
@@ -26,6 +31,16 @@ public class OrderService : IOrderService
     // ---------------------------------------------------
     public async Task<OrderDto> CreateFullOrderAsync(OrderCreateDto dto)
     {
+        // ----- Get User Info From JWT -----
+        var user = _contextAccessor.HttpContext.User;
+
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var email = user.FindFirst(ClaimTypes.Email)?.Value;
+
+
+        if (userId == null || email == null)
+            throw new Exception("Unable to read user identity from JWT.");
+
         // 1) PARTY
         var party = CreatePartyFromDto(dto.Party);
         await _uow.OrderParties.AddAsync(party);
@@ -41,17 +56,23 @@ public class OrderService : IOrderService
             SellPriceInGel = dto.SellPriceInGel,
             Status = OrderStatus.Open,
             OrderParty = party,
-            Tour = tour
+            Tour = tour,
+
+            // ----- Write Creator Info into Order -----
+            CreatedById = Guid.Parse(userId),
+            CreatedByEmail = email
         };
 
         await _uow.Orders.AddAsync(order);
 
-        // 4) PAYMENTS (full add)
+        // 4) PAYMENTS
         await RebuildPaymentsAsync(order, dto.Payments);
 
         await _uow.SaveChangesAsync();
+
         return _mapper.Map<OrderDto>(order);
     }
+
 
     // ---------------------------------------------------
     // EDIT ORDER (FULL REPLACE OF NESTED GRAPH)

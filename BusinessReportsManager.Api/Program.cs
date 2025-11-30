@@ -26,6 +26,17 @@ builder.Environment.EnvironmentName = "Development";
 // Controllers
 builder.Services.AddControllers().AddNewtonsoftJson();
 builder.Services.AddProblemDetails();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials()
+              .SetIsOriginAllowed(origin => true);
+    });
+});
+
 
 // Database
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -40,6 +51,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddIdentity<AppUser, IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
+
+builder.Services.AddHttpContextAccessor();
 
 // JWT
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -171,6 +184,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.UseCors("AllowFrontend");
 
 // Migration & Seeding
 using (var scope = app.Services.CreateScope())

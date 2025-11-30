@@ -110,9 +110,14 @@ public class AppProfile : Profile
         // ORDER
         // ======================================================
         CreateMap<Order, OrderDto>()
-            .ForMember(d => d.PersonParty, o => o.MapFrom(s => s.OrderParty as PersonParty))
-            .ForMember(d => d.CompanyParty, o => o.MapFrom(s => s.OrderParty as CompanyParty))
-            .ForMember(d => d.Tour, o => o.MapFrom(s => s.Tour))
-            .ForMember(d => d.Payments, o => o.MapFrom(s => s.Payments));
+    .ForMember(d => d.PersonParty, o => o.MapFrom(s => s.OrderParty as PersonParty))
+    .ForMember(d => d.CompanyParty, o => o.MapFrom(s => s.OrderParty as CompanyParty))
+    .ForMember(d => d.Tour, o => o.MapFrom(s => s.Tour != null ? s.Tour : null))
+    .ForMember(d => d.Payments, o => o.MapFrom(s => s.Payments ?? new List<Payment>()))
+    .ForMember(d => d.CreatedById, o => o.MapFrom(s => s.CreatedById))
+    .ForMember(d => d.CreatedByEmail, o => o.MapFrom(s => s.CreatedByEmail));
+
+
+
     }
 }

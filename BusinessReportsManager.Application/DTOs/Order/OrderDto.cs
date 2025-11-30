@@ -8,6 +8,9 @@ namespace BusinessReportsManager.Application.DTOs.Order;
 public class OrderDto
 {
     public Guid Id { get; set; }
+    public Guid? CreatedById { get; set; }
+    public string? CreatedByEmail { get; set; } = string.Empty;
+
     public string OrderNumber { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public decimal SellPriceInGel { get; set; }
