@@ -17,5 +17,4 @@ public class TourCreateDto
 
     public List<AirTicketCreateDto> AirTickets { get; set; } = new();
     public List<HotelBookingCreateDto> HotelBookings { get; set; } = new();
-    public List<ExtraServiceCreateDto> ExtraServices { get; set; } = new();
 }

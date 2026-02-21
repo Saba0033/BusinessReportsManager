@@ -16,9 +16,7 @@ public class OrderDto
     public decimal SellPriceInGel { get; set; }
     public OrderStatus Status { get; set; }
 
-    public PersonPartyDto? PersonParty { get; set; }
-    public CompanyPartyDto? CompanyParty { get; set; }
-
+    public PartyDto Party { get; set; } = new();
     public TourDto Tour { get; set; } = new();
     public List<PaymentDto> Payments { get; set; } = new();
 }

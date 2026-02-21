@@ -14,5 +14,4 @@ public class OrderCreateDto
     public decimal SellPriceInGel { get; set; }
 
     public List<PassengerCreateDto> Passengers { get; set; } = new();
-    public List<PaymentCreateDto> Payments { get; set; } = new();
 }

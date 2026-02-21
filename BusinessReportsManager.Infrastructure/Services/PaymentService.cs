@@ -31,7 +31,7 @@ public class PaymentService : IPaymentService
             Amount = dto.Price.Amount,
             Currency = dto.Price.Currency,
             ExchangeRateToGel = dto.Price.ExchangeRateToGel,
-            EffectiveDate = dto.Price.EffectiveDate
+            EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
         };
 
         await _uow.PriceCurrencies.AddAsync(price);

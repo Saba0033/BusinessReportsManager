@@ -31,19 +31,16 @@ public class OrderService : IOrderService
     // ---------------------------------------------------
     public async Task<OrderDto> CreateFullOrderAsync(OrderCreateDto dto)
     {
-        // ----- Get User Info From JWT -----
-        var user = _contextAccessor.HttpContext.User;
+        var user = _contextAccessor.HttpContext?.User;
 
-        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var email = user.FindFirst(ClaimTypes.Email)?.Value;
-
+        var userId = user?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var email = user?.FindFirst(ClaimTypes.Email)?.Value;
 
         if (userId == null || email == null)
             throw new Exception("Unable to read user identity from JWT.");
 
-        // 1) PARTY
-        var party = CreatePartyFromDto(dto.Party);
-        await _uow.OrderParties.AddAsync(party);
+        // 1) PARTY (link or create)
+        var party = await GetOrCreatePersonPartyAsync(dto.Party);
 
         // 2) TOUR + nested graph
         var tour = await CreateTourGraphAsync(dto);
@@ -57,21 +54,16 @@ public class OrderService : IOrderService
             Status = OrderStatus.Open,
             OrderParty = party,
             Tour = tour,
-
-            // ----- Write Creator Info into Order -----
             CreatedById = Guid.Parse(userId),
             CreatedByEmail = email
         };
 
         await _uow.Orders.AddAsync(order);
-
-        // 4) PAYMENTS
-        await RebuildPaymentsAsync(order, dto.Payments);
-
         await _uow.SaveChangesAsync();
 
         return _mapper.Map<OrderDto>(order);
     }
+
 
 
     // ---------------------------------------------------
@@ -86,7 +78,7 @@ public class OrderService : IOrderService
         order.Source = dto.Source;
         order.SellPriceInGel = dto.SellPriceInGel;
 
-        // 2) PARTY
+        // 2) PARTY (person-only)
         await UpdatePartyAsync(order, dto.Party);
 
         // 3) TOUR ROOT
@@ -96,16 +88,16 @@ public class OrderService : IOrderService
         await RebuildPassengersAsync(order, dto);
         await RebuildAirTicketsAsync(order, dto);
         await RebuildHotelBookingsAsync(order, dto);
-        await RebuildExtraServicesAsync(order, dto);
 
-        // 5) PAYMENTS (full replace)
-        await RebuildPaymentsAsync(order, dto.Payments);
+        // ExtraServices NOT edited here anymore (separate endpoint later)
+        // Payments NOT edited here anymore (separate endpoint later)
 
         await _uow.Orders.UpdateAsync(order);
         await _uow.SaveChangesAsync();
 
         return _mapper.Map<OrderDto>(order);
     }
+
 
     // ---------------------------------------------------
     // CHANGE STATUS
@@ -202,26 +194,65 @@ public class OrderService : IOrderService
     // PRIVATE HELPERS
     // ===================================================
 
-    private static OrderParty CreatePartyFromDto(PartyCreateDto dto)
+    private async Task<PersonParty> GetOrCreatePersonPartyAsync(PartyCreateDto dto)
     {
-        return dto.Type.Equals("Company", StringComparison.OrdinalIgnoreCase)
-            ? new CompanyParty
+        if (dto.Id.HasValue && dto.Id.Value != Guid.Empty)
+        {
+            var id = dto.Id.Value;
+
+            var existing = await _uow.OrderParties.Query()
+                .OfType<PersonParty>()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (existing != null)
             {
-                Email = dto.Email,
-                Phone = dto.Phone,
-                CompanyName = dto.CompanyName,
-                RegistrationNumber = dto.RegistrationNumber,
-                ContactPerson = dto.ContactPerson
+                ApplyFullName(existing, dto.FullName);
+                existing.Email = dto.Email;
+                existing.Phone = dto.Phone;
+                return existing;
             }
-            : new PersonParty
-            {
-                Email = dto.Email,
-                Phone = dto.Phone,
-                FirstName = dto.FirstName,
-                LastName = dto.LastName,
-                BirthDate = dto.BirthDate
-            };
+
+            // If FE sends an id but it's not found, just create new
+            // (optional: log a warning)
+        }
+
+        var party = new PersonParty
+        {
+            Email = dto.Email,
+            Phone = dto.Phone
+        };
+
+        ApplyFullName(party, dto.FullName);
+        await _uow.OrderParties.AddAsync(party);
+
+        return party;
     }
+
+
+
+    private static void ApplyFullName(PersonParty party, string fullName)
+    {
+        fullName = (fullName ?? "").Trim();
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 0)
+        {
+            party.FirstName = "";
+            party.LastName = "";
+            return;
+        }
+
+        if (parts.Length == 1)
+        {
+            party.FirstName = parts[0];
+            party.LastName = "";
+            return;
+        }
+
+        party.FirstName = string.Join(" ", parts[..^1]);
+        party.LastName = parts[^1];
+    }
+
 
     private async Task<Tour> CreateTourGraphAsync(OrderCreateDto dto)
     {
@@ -248,40 +279,32 @@ public class OrderService : IOrderService
             ticket.Tour = tour;
 
             var price = _mapper.Map<PriceCurrency>(t.Price);
+            price.EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow);
             ticket.PriceCurrency = price;
 
             await _uow.PriceCurrencies.AddAsync(price);
             await _uow.AirTickets.AddAsync(ticket);
         }
 
-        // Hotel bookings
+        // Hotel bookings (now only Price in dto)
         foreach (var h in dto.Tour.HotelBookings)
         {
             var hotel = _mapper.Map<HotelBooking>(h);
             hotel.Tour = tour;
 
             var price = _mapper.Map<PriceCurrency>(h.Price);
+            price.EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow);
             hotel.PriceCurrency = price;
 
             await _uow.PriceCurrencies.AddAsync(price);
             await _uow.HotelBookings.AddAsync(hotel);
         }
 
-        // Extra services
-        foreach (var e in dto.Tour.ExtraServices)
-        {
-            var extra = _mapper.Map<ExtraService>(e);
-            extra.Tour = tour;
-
-            var price = _mapper.Map<PriceCurrency>(e.Price);
-            extra.PriceCurrency = price;
-
-            await _uow.PriceCurrencies.AddAsync(price);
-            await _uow.ExtraServices.AddAsync(extra);
-        }
+        // ExtraServices removed from create payload => don't create them here
 
         return tour;
     }
+
 
     private async Task<Order?> LoadOrderGraphAsync(Guid orderId)
     {
@@ -298,28 +321,34 @@ public class OrderService : IOrderService
 
     private async Task UpdatePartyAsync(Order order, PartyCreateDto dto)
     {
-        var isCompany = dto.Type.Equals("Company", StringComparison.OrdinalIgnoreCase);
-
-        if (isCompany && order.OrderParty is CompanyParty companyParty)
+        // If FE sends Party.Id -> link existing
+        if (dto.Id.HasValue && dto.Id.Value != Guid.Empty)
         {
-            _mapper.Map(dto, companyParty);
-        }
-        else if (!isCompany && order.OrderParty is PersonParty personParty)
-        {
-            _mapper.Map(dto, personParty);
-        }
-        else
-        {
-            var oldParty = order.OrderParty;
-            var newParty = CreatePartyFromDto(dto);
+            var id = dto.Id.Value;
+            var existing = await _uow.OrderParties.Query()
+                .OfType<PersonParty>()
+                .FirstOrDefaultAsync(p => p.Id == id);
 
-            order.OrderParty = newParty;
+            if (existing == null)
+                throw new Exception("Party not found.");
 
-            await _uow.OrderParties.AddAsync(newParty);
-            if (oldParty != null)
-                await _uow.OrderParties.RemoveAsync(oldParty);
+            order.OrderParty = existing;
+            return;
         }
+
+        // Otherwise update current party (ensure it's PersonParty)
+        if (order.OrderParty is not PersonParty person)
+        {
+            person = new PersonParty();
+            await _uow.OrderParties.AddAsync(person);
+            order.OrderParty = person;
+        }
+
+        ApplyFullName(person, dto.FullName);
+        person.Email = dto.Email;
+        person.Phone = dto.Phone;
     }
+
 
     private async Task RebuildPassengersAsync(Order order, OrderEditDto dto)
     {
@@ -384,64 +413,64 @@ public class OrderService : IOrderService
         }
     }
 
-    private async Task RebuildExtraServicesAsync(Order order, OrderEditDto dto)
-    {
-        foreach (var e in order.Tour!.ExtraServices.ToList())
-        {
-            if (e.PriceCurrency != null)
-                await _uow.PriceCurrencies.RemoveAsync(e.PriceCurrency);
+    //private async Task RebuildExtraServicesAsync(Order order, OrderEditDto dto)
+    //{
+    //    foreach (var e in order.Tour!.ExtraServices.ToList())
+    //    {
+    //        if (e.PriceCurrency != null)
+    //            await _uow.PriceCurrencies.RemoveAsync(e.PriceCurrency);
 
-            await _uow.ExtraServices.RemoveAsync(e);
-        }
-        order.Tour.ExtraServices.Clear();
+    //        await _uow.ExtraServices.RemoveAsync(e);
+    //    }
+    //    order.Tour.ExtraServices.Clear();
 
-        foreach (var eDto in dto.Tour.ExtraServices)
-        {
-            var extra = _mapper.Map<ExtraService>(eDto);
-            extra.Tour = order.Tour;
+    //    foreach (var eDto in dto.Tour.ExtraServices)
+    //    {
+    //        var extra = _mapper.Map<ExtraService>(eDto);
+    //        extra.Tour = order.Tour;
 
-            var price = _mapper.Map<PriceCurrency>(eDto.Price);
-            extra.PriceCurrency = price;
+    //        var price = _mapper.Map<PriceCurrency>(eDto.Price);
+    //        extra.PriceCurrency = price;
 
-            await _uow.PriceCurrencies.AddAsync(price);
-            await _uow.ExtraServices.AddAsync(extra);
-        }
-    }
+    //        await _uow.PriceCurrencies.AddAsync(price);
+    //        await _uow.ExtraServices.AddAsync(extra);
+    //    }
+    //}
 
-    private async Task RebuildPaymentsAsync(Order order, IEnumerable<PaymentCreateDto> paymentDtos)
-    {
-        // remove existing
-        foreach (var existing in order.Payments.ToList())
-        {
-            if (existing.PriceCurrency != null)
-                await _uow.PriceCurrencies.RemoveAsync(existing.PriceCurrency);
+    //private async Task RebuildPaymentsAsync(Order order, IEnumerable<PaymentCreateDto> paymentDtos)
+    //{
+    //    // remove existing
+    //    foreach (var existing in order.Payments.ToList())
+    //    {
+    //        if (existing.PriceCurrency != null)
+    //            await _uow.PriceCurrencies.RemoveAsync(existing.PriceCurrency);
 
-            await _uow.Payments.RemoveAsync(existing);
-        }
-        order.Payments.Clear();
+    //        await _uow.Payments.RemoveAsync(existing);
+    //    }
+    //    order.Payments.Clear();
 
-        // add new
-        foreach (var dto in paymentDtos)
-        {
-            var price = new PriceCurrency
-            {
-                Amount = dto.Price.Amount,
-                Currency = dto.Price.Currency,
-                ExchangeRateToGel = dto.Price.ExchangeRateToGel,
-                EffectiveDate = dto.Price.EffectiveDate
-            };
+    //    // add new
+    //    foreach (var dto in paymentDtos)
+    //    {
+    //        var price = new PriceCurrency
+    //        {
+    //            Amount = dto.Price.Amount,
+    //            Currency = dto.Price.Currency,
+    //            ExchangeRateToGel = dto.Price.ExchangeRateToGel,
+    //            EffectiveDate = dto.Price.EffectiveDate
+    //        };
 
-            await _uow.PriceCurrencies.AddAsync(price);
+    //        await _uow.PriceCurrencies.AddAsync(price);
 
-            var payment = new Payment
-            {
-                Order = order,
-                PriceCurrency = price,
-                BankName = dto.BankName,
-                PaidDate = dto.PaidDate
-            };
+    //        var payment = new Payment
+    //        {
+    //            Order = order,
+    //            PriceCurrency = price,
+    //            BankName = dto.BankName,
+    //            PaidDate = dto.PaidDate
+    //        };
 
-            await _uow.Payments.AddAsync(payment);
-        }
-    }
+    //        await _uow.Payments.AddAsync(payment);
+    //    }
+    //}
 }

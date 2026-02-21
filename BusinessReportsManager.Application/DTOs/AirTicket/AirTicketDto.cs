@@ -9,8 +9,6 @@ public class AirTicketDto
     public string CityFrom { get; set; } = string.Empty;
     public string CityTo { get; set; } = string.Empty;
     public DateOnly FlightDate { get; set; }
-    public string FlightCompanyName { get; set; } = string.Empty;
-    public int Quantity { get; set; }
 
     public PriceCurrencyDto Price { get; set; } = new();
 }

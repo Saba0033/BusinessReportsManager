@@ -10,6 +10,9 @@ using BusinessReportsManager.Application.DTOs.PriceCurrency;
 using BusinessReportsManager.Application.DTOs.Supplier;
 using BusinessReportsManager.Application.DTOs.Tour;
 using BusinessReportsManager.Domain.Entities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace BusinessReportsManager.Application.Mappings;
 
@@ -24,20 +27,28 @@ public class AppProfile : Profile
         CreateMap<PriceCurrencyCreateDto, PriceCurrency>();
 
         // ======================================================
-        // ORDER PARTY
+        // ORDER PARTY (Person only; API exposes PartyDto)
         // ======================================================
-        CreateMap<PersonParty, PersonPartyDto>();
-        CreateMap<CompanyParty, CompanyPartyDto>();
+        CreateMap<PersonParty, PartyDto>()
+            .ForMember(d => d.FullName,
+                o => o.MapFrom(s => $"{s.FirstName} {s.LastName}".Trim()));
 
         CreateMap<PartyCreateDto, PersonParty>()
-            .ForMember(d => d.FirstName, o => o.MapFrom(s => s.FirstName))
-            .ForMember(d => d.LastName, o => o.MapFrom(s => s.LastName))
-            .ForMember(d => d.BirthDate, o => o.MapFrom(s => s.BirthDate));
-
-        CreateMap<PartyCreateDto, CompanyParty>()
-            .ForMember(d => d.CompanyName, o => o.MapFrom(s => s.CompanyName))
-            .ForMember(d => d.RegistrationNumber, o => o.MapFrom(s => s.RegistrationNumber))
-            .ForMember(d => d.ContactPerson, o => o.MapFrom(s => s.ContactPerson));
+            .ForMember(d => d.FirstName, o => o.MapFrom(s =>
+                string.IsNullOrWhiteSpace(s.FullName)
+                    ? string.Empty
+                    : s.FullName.Trim()
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries)[0]
+            ))
+            .ForMember(d => d.LastName, o => o.MapFrom(s =>
+                string.IsNullOrWhiteSpace(s.FullName)
+                    ? string.Empty
+                    : string.Join(" ",
+                        s.FullName.Trim()
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                            .Skip(1))
+            ))
+            .ForMember(d => d.BirthDate, o => o.Ignore());
 
         // ======================================================
         // SUPPLIER
@@ -46,19 +57,37 @@ public class AppProfile : Profile
         CreateMap<SupplierCreateDto, Supplier>();
 
         // ======================================================
-        // PASSENGER
+        // PASSENGER (FullName only in DTO)
         // ======================================================
-        CreateMap<Passenger, PassengerDto>();
-        CreateMap<PassengerCreateDto, Passenger>();
+        CreateMap<Passenger, PassengerDto>()
+            .ForMember(d => d.FullName,
+                o => o.MapFrom(s => $"{s.FirstName} {s.LastName}".Trim()));
+
+        CreateMap<PassengerCreateDto, Passenger>()
+            .ForMember(d => d.FirstName, o => o.MapFrom(s =>
+                string.IsNullOrWhiteSpace(s.FullName)
+                    ? string.Empty
+                    : s.FullName.Trim()
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries)[0]
+            ))
+            .ForMember(d => d.LastName, o => o.MapFrom(s =>
+                string.IsNullOrWhiteSpace(s.FullName)
+                    ? string.Empty
+                    : string.Join(" ",
+                        s.FullName.Trim()
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                            .Skip(1))
+            ))
+            .ForMember(d => d.BirthDate, o => o.Ignore())
+            .ForMember(d => d.DocumentNumber, o => o.Ignore());
 
         // ======================================================
         // PAYMENT
         // ======================================================
-        // PaymentDto.Price ← Payment.PriceCurrency
         CreateMap<Payment, PaymentDto>()
-            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
+            .ForMember(d => d.Price,
+                o => o.MapFrom(s => s.PriceCurrency));
 
-        // PaymentCreateDto.Price → PriceCurrency
         CreateMap<PaymentCreateDto, Payment>()
             .ForMember(d => d.PriceCurrency, o => o.Ignore());
 
@@ -66,7 +95,8 @@ public class AppProfile : Profile
         // AIR TICKET
         // ======================================================
         CreateMap<AirTicket, AirTicketDto>()
-            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
+            .ForMember(d => d.Price,
+                o => o.MapFrom(s => s.PriceCurrency));
 
         CreateMap<AirTicketCreateDto, AirTicket>()
             .ForMember(d => d.PriceCurrency, o => o.Ignore());
@@ -75,16 +105,18 @@ public class AppProfile : Profile
         // HOTEL BOOKING
         // ======================================================
         CreateMap<HotelBooking, HotelBookingDto>()
-            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
+            .ForMember(d => d.Price,
+                o => o.MapFrom(s => s.PriceCurrency));
 
         CreateMap<HotelBookingCreateDto, HotelBooking>()
             .ForMember(d => d.PriceCurrency, o => o.Ignore());
 
         // ======================================================
-        // EXTRA SERVICE
+        // EXTRA SERVICE (for GET only)
         // ======================================================
         CreateMap<ExtraService, ExtraServiceDto>()
-            .ForMember(d => d.Price, o => o.MapFrom(s => s.PriceCurrency));
+            .ForMember(d => d.Price,
+                o => o.MapFrom(s => s.PriceCurrency));
 
         CreateMap<ExtraServiceCreateDto, ExtraService>()
             .ForMember(d => d.PriceCurrency, o => o.Ignore());
@@ -93,11 +125,16 @@ public class AppProfile : Profile
         // TOUR
         // ======================================================
         CreateMap<Tour, TourDto>()
-            .ForMember(d => d.Supplier, o => o.MapFrom(s => s.TourSupplier))
-            .ForMember(d => d.Passengers, o => o.MapFrom(s => s.Passengers))
-            .ForMember(d => d.AirTickets, o => o.MapFrom(s => s.AirTickets))
-            .ForMember(d => d.HotelBookings, o => o.MapFrom(s => s.HotelBookings))
-            .ForMember(d => d.ExtraServices, o => o.MapFrom(s => s.ExtraServices));
+            .ForMember(d => d.Supplier,
+                o => o.MapFrom(s => s.TourSupplier))
+            .ForMember(d => d.Passengers,
+                o => o.MapFrom(s => s.Passengers))
+            .ForMember(d => d.AirTickets,
+                o => o.MapFrom(s => s.AirTickets))
+            .ForMember(d => d.HotelBookings,
+                o => o.MapFrom(s => s.HotelBookings))
+            .ForMember(d => d.ExtraServices,
+                o => o.MapFrom(s => s.ExtraServices));
 
         CreateMap<TourCreateDto, Tour>()
             .ForMember(d => d.TourSupplier, o => o.Ignore())
@@ -107,17 +144,18 @@ public class AppProfile : Profile
             .ForMember(d => d.ExtraServices, o => o.Ignore());
 
         // ======================================================
-        // ORDER
+        // ORDER (using resolver)
         // ======================================================
         CreateMap<Order, OrderDto>()
-    .ForMember(d => d.PersonParty, o => o.MapFrom(s => s.OrderParty as PersonParty))
-    .ForMember(d => d.CompanyParty, o => o.MapFrom(s => s.OrderParty as CompanyParty))
-    .ForMember(d => d.Tour, o => o.MapFrom(s => s.Tour != null ? s.Tour : null))
-    .ForMember(d => d.Payments, o => o.MapFrom(s => s.Payments ?? new List<Payment>()))
-    .ForMember(d => d.CreatedById, o => o.MapFrom(s => s.CreatedById))
-    .ForMember(d => d.CreatedByEmail, o => o.MapFrom(s => s.CreatedByEmail));
-
-
-
+            .ForMember(d => d.Party,
+                o => o.MapFrom<OrderPartyToPartyDtoResolver>())
+            .ForMember(d => d.Tour,
+                o => o.MapFrom(s => s.Tour))
+            .ForMember(d => d.Payments,
+                o => o.MapFrom(s => s.Payments ?? new List<Payment>()))
+            .ForMember(d => d.CreatedById,
+                o => o.MapFrom(s => s.CreatedById))
+            .ForMember(d => d.CreatedByEmail,
+                o => o.MapFrom(s => s.CreatedByEmail));
     }
 }

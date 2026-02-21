@@ -30,8 +30,20 @@ public class OrderController : ControllerBase
     [ProducesResponseType(typeof(OrderDto), 201)]
     public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
     {
-        var result = await _orders.CreateFullOrderAsync(dto);
-        return CreatedAtAction(nameof(GetById), new { orderId = result.Id }, result);
+        try
+        {
+            var result = await _orders.CreateFullOrderAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { orderId = result.Id }, result);
+        }
+        catch (Exception ex)
+        {
+            // TEMPORARY for debugging only (remove later)
+            return StatusCode(500, new
+            {
+                error = ex.Message,
+                details = ex.ToString()
+            });
+        }
     }
 
     /// <summary>
