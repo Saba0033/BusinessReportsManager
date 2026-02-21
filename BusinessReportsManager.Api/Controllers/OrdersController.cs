@@ -15,11 +15,16 @@ public class OrderController : ControllerBase
 {
     private readonly IOrderService _orders;
     private readonly IPaymentService _payments;
+    private readonly IOrderExcelExportService _orderExcelExport;
 
-    public OrderController(IOrderService orders, IPaymentService payments)
+    public OrderController(
+        IOrderService orders,
+        IPaymentService payments,
+        IOrderExcelExportService orderExcelExport)
     {
         _orders = orders;
         _payments = payments;
+        _orderExcelExport = orderExcelExport;
     }
 
     /// <summary>
@@ -98,7 +103,25 @@ public class OrderController : ControllerBase
     {
         return Ok(await _orders.GetByDateRangeAsync(start, end));
     }
-    
+
+    /// <summary>
+    /// Downloads full order info as an Excel file.
+    /// </summary>
+    [HttpGet("{orderId:guid}/excel")]
+    [ProducesResponseType(typeof(FileContentResult), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> DownloadExcel(Guid orderId)
+    {
+        var result = await _orderExcelExport.ExportOrderInfoAsync(orderId);
+        if (result is null)
+            return NotFound();
+
+        return File(
+            result.Value.Content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            result.Value.FileName);
+    }
+
 
     /// <summary>
     /// Changes the status of an order.
