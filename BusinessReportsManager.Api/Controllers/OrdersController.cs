@@ -15,11 +15,13 @@ public class OrderController : ControllerBase
 {
     private readonly IOrderService _orders;
     private readonly IPaymentService _payments;
+    private readonly IOrderExcelService _orderExcel;
 
-    public OrderController(IOrderService orders, IPaymentService payments)
+    public OrderController(IOrderService orders, IPaymentService payments, IOrderExcelService orderExcel)
     {
         _orders = orders;
         _payments = payments;
+        _orderExcel = orderExcel;
     }
 
     /// <summary>
@@ -138,5 +140,24 @@ public class OrderController : ControllerBase
         return success ? NoContent() : NotFound();
     }
 
-
+    /// <summary>
+    /// Downloads the order information as an Excel file.
+    /// </summary>
+    [HttpGet("{orderId:guid}/export-excel")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ExportExcel(Guid orderId)
+    {
+        try
+        {
+            var fileBytes = await _orderExcel.GenerateOrderExcelAsync(orderId);
+            return File(fileBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"order-{orderId}.xlsx");
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
 }
