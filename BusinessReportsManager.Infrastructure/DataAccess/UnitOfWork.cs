@@ -22,6 +22,8 @@ public class UnitOfWork : IUnitOfWork
         AirTickets = new GenericRepository<AirTicket>(context);
         HotelBookings = new GenericRepository<HotelBooking>(context);
         ExtraServices = new GenericRepository<ExtraService>(context);
+        CustomerBankRequisites = new GenericRepository<CustomerBankRequisites>(context);
+
     }
 
     public IGenericRepository<Order> Orders { get; }
@@ -34,9 +36,10 @@ public class UnitOfWork : IUnitOfWork
     public IGenericRepository<AirTicket> AirTickets { get; }
     public IGenericRepository<HotelBooking> HotelBookings { get; }
     public IGenericRepository<ExtraService> ExtraServices { get; }
-    
-    
-    
+    public IGenericRepository<CustomerBankRequisites> CustomerBankRequisites { get; }
+
+
+
 
     public Task<int> SaveChangesAsync() => _context.SaveChangesAsync();
 }

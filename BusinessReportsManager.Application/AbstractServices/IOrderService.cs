@@ -1,3 +1,4 @@
+using BusinessReportsManager.Application.DTOs;
 using BusinessReportsManager.Application.DTOs.Order;
 using BusinessReportsManager.Domain.Enums;
 
@@ -16,4 +17,8 @@ public interface IOrderService
     Task<List<OrderDto>> GetByStatusAsync(OrderStatus status);
     Task<List<OrderDto>> GetByPartyAsync(Guid partyId);
     Task<List<OrderDto>> GetByDateRangeAsync(DateTime start, DateTime end);
+    Task<List<SavedCustomerDto>> GetSavedCustomersAsync();
+    Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startDate, DateOnly? endDate);
+    Task<bool> UpdateAccountingCommentAsync(Guid orderId, string? comment);
+
 }

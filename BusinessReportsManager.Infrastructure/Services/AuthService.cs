@@ -27,7 +27,8 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
     {
-        var user = await _userManager.FindByEmailAsync(request.Email);
+        // Login by USERNAME (not email)
+        var user = await _userManager.FindByNameAsync(request.UserName);
         if (user is null)
             throw new UnauthorizedAccessException("Invalid credentials");
 
@@ -48,17 +49,24 @@ public class AuthService : IAuthService
 
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest request, string role, CancellationToken ct = default)
     {
-        // Check if user exists
-        var existing = await _userManager.FindByEmailAsync(request.Email);
-        if (existing != null)
-            throw new Exception("User already exists.");
+        // 1) Email unique
+        var existingByEmail = await _userManager.FindByEmailAsync(request.Email);
+        if (existingByEmail != null)
+            throw new Exception("Email already exists.");
 
-        // Create AppUser
+        // 2) Username unique
+        var existingByUserName = await _userManager.FindByNameAsync(request.UserName);
+        if (existingByUserName != null)
+            throw new Exception("Username already exists.");
+
+        // 3) Create user
         var user = new AppUser
         {
             Email = request.Email,
-            UserName = request.Email,
-            FullName = request.FullName
+            UserName = request.UserName,
+
+            // Keep column, but stop using it in the app
+            FullName = null
         };
 
         var created = await _userManager.CreateAsync(user, request.Password);
@@ -68,16 +76,15 @@ public class AuthService : IAuthService
             throw new Exception(errors);
         }
 
-        // Assign role (use Employee if none is provided)
-        string targetRole = string.IsNullOrWhiteSpace(role)
-            ? "Employee"
-            : role!;
+        // 4) Assign role (default Employee)
+        var targetRole = string.IsNullOrWhiteSpace(role) ? "Employee" : role;
 
         if (!await _roleManager.RoleExistsAsync(targetRole))
             throw new Exception($"Role '{targetRole}' does not exist.");
 
         await _userManager.AddToRoleAsync(user, targetRole);
 
-        return new RegisterResponse(user.Id, user.Email!, user.FullName!);
+        // 5) Response
+        return new RegisterResponse(user.Id, user.UserName!, user.Email!);
     }
 }

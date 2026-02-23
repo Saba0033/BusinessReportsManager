@@ -1,5 +1,6 @@
 using AutoMapper;
 using BusinessReportsManager.Application.AbstractServices;
+using BusinessReportsManager.Application.DTOs;
 using BusinessReportsManager.Application.DTOs.Order;
 using BusinessReportsManager.Application.DTOs.OrderParty;
 using BusinessReportsManager.Application.DTOs.Payment;
@@ -39,6 +40,14 @@ public class OrderService : IOrderService
         if (userId == null || email == null)
             throw new Exception("Unable to read user identity from JWT.");
 
+        CustomerBankRequisites? req = null;
+
+        if (dto.CustomerBankRequisites != null)
+        {
+            req = _mapper.Map<CustomerBankRequisites>(dto.CustomerBankRequisites);
+            await _uow.CustomerBankRequisites.AddAsync(req); ; // you'll add this repo to UoW
+        }
+
         // 1) PARTY (link or create)
         var party = await GetOrCreatePersonPartyAsync(dto.Party);
 
@@ -55,7 +64,8 @@ public class OrderService : IOrderService
             OrderParty = party,
             Tour = tour,
             CreatedById = Guid.Parse(userId),
-            CreatedByEmail = email
+            CreatedByEmail = email,
+            CustomerBankRequisites = req
         };
 
         await _uow.Orders.AddAsync(order);
@@ -188,6 +198,29 @@ public class OrderService : IOrderService
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
+    }
+
+    public async Task<bool> UpdateAccountingCommentAsync(Guid orderId, string? comment)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return false;
+
+        var user = _contextAccessor.HttpContext?.User;
+
+        var userIdStr = user?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var email = user?.FindFirst(ClaimTypes.Email)?.Value;
+
+        order.AccountingComment = comment;
+        order.AccountingCommentUpdatedAtUtc = DateTime.UtcNow;
+        order.AccountingCommentUpdatedByEmail = email;
+
+        if (Guid.TryParse(userIdStr, out var userId))
+            order.AccountingCommentUpdatedById = userId;
+
+        await _uow.Orders.UpdateAsync(order);
+        await _uow.SaveChangesAsync();
+
+        return true;
     }
 
     // ===================================================
@@ -413,6 +446,57 @@ public class OrderService : IOrderService
         }
     }
 
+    public async Task<List<SavedCustomerDto>> GetSavedCustomersAsync()
+    {
+        var customers = await _uow.Orders.Query()
+            .GroupBy(o => o.OrderPartyId)
+            .Where(g => g.Count() >= 3)
+            .Select(g => g.Key)
+            .Join(
+                _uow.OrderParties.Query().OfType<PersonParty>(),
+                partyId => partyId,
+                p => p.Id,
+                (partyId, p) => new SavedCustomerDto
+                {
+                    Id = p.Id,
+                    FullName = (p.FirstName + " " + p.LastName).Trim()
+                }
+            )
+            .ToListAsync();
+
+        return customers;
+    }
+
+public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startDate, DateOnly? endDate)
+{
+    var q = _uow.Orders.Query()
+        .Include(o => o.OrderParty)
+        .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+        .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+        .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+        .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+        .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(tourName))
+    {
+        var term = tourName.Trim().ToLower();
+          q = q.Where(o => o.Tour != null && EF.Functions.ILike(o.Tour.Name, $"%{tourName.Trim()}%"));
+           
+        }
+
+    if (startDate.HasValue)
+        q = q.Where(o => o.Tour != null && o.Tour.StartDate >= startDate.Value);
+
+    if (endDate.HasValue)
+        q = q.Where(o => o.Tour != null && o.Tour.EndDate <= endDate.Value);
+
+    var orders = await q.ToListAsync();
+    return _mapper.Map<List<OrderDto>>(orders);
+}
+
+  
+
     //private async Task RebuildExtraServicesAsync(Order order, OrderEditDto dto)
     //{
     //    foreach (var e in order.Tour!.ExtraServices.ToList())
@@ -473,4 +557,6 @@ public class OrderService : IOrderService
     //        await _uow.Payments.AddAsync(payment);
     //    }
     //}
+
+
 }

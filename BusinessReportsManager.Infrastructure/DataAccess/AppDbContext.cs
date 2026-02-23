@@ -21,6 +21,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<Passenger> Passengers => Set<Passenger>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PriceCurrency> PriceCurrencies => Set<PriceCurrency>();
+    public DbSet<CustomerBankRequisites> CustomerBankRequisites { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -63,6 +64,11 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .HasForeignKey(p => p.TourId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+        modelBuilder.Entity<Order>()
+           .HasOne(o => o.CustomerBankRequisites)
+           .WithMany()
+           .HasForeignKey(o => o.CustomerBankRequisitesId)
+           .OnDelete(DeleteBehavior.SetNull);
 
         // ---- Supplier–Tour relationship ----
         modelBuilder.Entity<Tour>()

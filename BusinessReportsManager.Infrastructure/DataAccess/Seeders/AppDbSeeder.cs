@@ -25,24 +25,63 @@ public static class AppDbSeeder
         }
 
         // ==========================================================
-        // 2. USERS
+        // 2. USERS (username-based login)
         // ==========================================================
-        async Task EnsureUser(string email, string role)
+        async Task EnsureUser(string email, string userName, string role)
         {
             var user = await userManager.FindByEmailAsync(email);
+
             if (user == null)
             {
-                user = new AppUser { Email = email, UserName = email };
-                await userManager.CreateAsync(user, "P@ssword1");
+                user = new AppUser
+                {
+                    Email = email,
+                    UserName = userName,
+                    FullName = null
+                };
+
+                var created = await userManager.CreateAsync(user, "P@ssword1");
+                if (!created.Succeeded)
+                {
+                    var errors = string.Join(", ", created.Errors.Select(e => e.Description));
+                    throw new Exception($"Failed to create seed user '{email}': {errors}");
+                }
+            }
+            else
+            {
+                // If user already exists from old seeding, update username to new value
+                if (!string.Equals(user.UserName, userName, StringComparison.OrdinalIgnoreCase))
+                {
+                    user.UserName = userName;
+                    user.NormalizedUserName = userManager.NormalizeName(userName);
+
+                    // Also ensure email is correct/normalized
+                    user.Email = email;
+                    user.NormalizedEmail = userManager.NormalizeEmail(email);
+
+                    var updated = await userManager.UpdateAsync(user);
+                    if (!updated.Succeeded)
+                    {
+                        var errors = string.Join(", ", updated.Errors.Select(e => e.Description));
+                        throw new Exception($"Failed to update seed user '{email}': {errors}");
+                    }
+                }
             }
 
             if (!await userManager.IsInRoleAsync(user, role))
-                await userManager.AddToRoleAsync(user, role);
+            {
+                var added = await userManager.AddToRoleAsync(user, role);
+                if (!added.Succeeded)
+                {
+                    var errors = string.Join(", ", added.Errors.Select(e => e.Description));
+                    throw new Exception($"Failed to add role '{role}' to '{email}': {errors}");
+                }
+            }
         }
 
-        await EnsureUser("employee@demo.local", "Employee");
-        await EnsureUser("accountant@demo.local", "Accountant");
-        await EnsureUser("supervisor@demo.local", "Supervisor");
+        await EnsureUser("employee@demo.local", "employee", "Employee");
+        await EnsureUser("accountant@demo.local", "accountant", "Accountant");
+        await EnsureUser("supervisor@demo.local", "supervisor", "Supervisor");
 
         // ==========================================================
         // Prevent Duplicate SEED Runs

@@ -1,4 +1,5 @@
 using AutoMapper;
+using BusinessReportsManager.Application.DTOs;
 using BusinessReportsManager.Application.DTOs.AirTicket;
 using BusinessReportsManager.Application.DTOs.ExtraService;
 using BusinessReportsManager.Application.DTOs.HotelBooking;
@@ -146,7 +147,7 @@ public class AppProfile : Profile
         // ======================================================
         // ORDER (using resolver)
         // ======================================================
-        CreateMap<Order, OrderDto>()
+        CreateMap<BusinessReportsManager.Domain.Entities.Order, BusinessReportsManager.Application.DTOs.Order.OrderDto>()
             .ForMember(d => d.Party,
                 o => o.MapFrom<OrderPartyToPartyDtoResolver>())
             .ForMember(d => d.Tour,
@@ -156,6 +157,15 @@ public class AppProfile : Profile
             .ForMember(d => d.CreatedById,
                 o => o.MapFrom(s => s.CreatedById))
             .ForMember(d => d.CreatedByEmail,
-                o => o.MapFrom(s => s.CreatedByEmail));
+                o => o.MapFrom(s => s.CreatedByEmail))
+            .ForMember(d => d.AccountingComment, o => o.MapFrom(s => s.AccountingComment))
+            .ForMember(d => d.AccountingCommentUpdatedAtUtc, o => o.MapFrom(s => s.AccountingCommentUpdatedAtUtc))
+            .ForMember(d => d.AccountingCommentUpdatedById, o => o.MapFrom(s => s.AccountingCommentUpdatedById))
+            .ForMember(d => d.AccountingCommentUpdatedByEmail, o => o.MapFrom(s => s.AccountingCommentUpdatedByEmail));
+
+        CreateMap<CustomerBankRequisites, CustomerBankRequisitesDto>();
+        CreateMap<CustomerBankRequisitesCreateDto, CustomerBankRequisites>();
+
+
     }
 }

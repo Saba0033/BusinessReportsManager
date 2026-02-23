@@ -1,9 +1,10 @@
 using BusinessReportsManager.Application.AbstractServices;
+using BusinessReportsManager.Application.DTOs;
 using BusinessReportsManager.Application.DTOs.Order;
 using BusinessReportsManager.Application.DTOs.Payment;
 using BusinessReportsManager.Domain.Enums;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 
 namespace BusinessReportsManager.API.Controllers;
@@ -112,7 +113,18 @@ public class OrderController : ControllerBase
     {
         return Ok(await _orders.GetByDateRangeAsync(start, end));
     }
-    
+
+    [HttpGet("search")]
+    [Authorize(Roles = "Supervisor,Employee")]
+    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    public async Task<IActionResult> Search(
+    [FromQuery] string? tourName,
+    [FromQuery] DateOnly? startDate,
+    [FromQuery] DateOnly? endDate)
+    {
+        return Ok(await _orders.SearchAsync(tourName, startDate, endDate));
+    }
+
 
     /// <summary>
     /// Changes the status of an order.
@@ -159,5 +171,23 @@ public class OrderController : ControllerBase
         {
             return NotFound();
         }
+    }
+
+    [HttpPatch("{orderId:guid}/accounting-comment")]
+    [Authorize(Roles = "Accountant,Supervisor")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UpdateAccountingComment(Guid orderId, [FromBody] AccountingCommentUpdateDto dto)
+    {
+        var ok = await _orders.UpdateAccountingCommentAsync(orderId, dto.Comment);
+        return ok ? NoContent() : NotFound();
+    }
+
+    [HttpGet("saved-customers")]
+    [Authorize(Roles = "Supervisor,Employee")]
+    [ProducesResponseType(typeof(List<SavedCustomerDto>), 200)]
+    public async Task<IActionResult> GetSavedCustomers()
+    {
+        return Ok(await _orders.GetSavedCustomersAsync());
     }
 }

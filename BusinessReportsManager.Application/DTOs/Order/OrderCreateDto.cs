@@ -12,6 +12,7 @@ public class OrderCreateDto
 
     public string Source { get; set; } = string.Empty;
     public decimal SellPriceInGel { get; set; }
+    public CustomerBankRequisitesCreateDto? CustomerBankRequisites { get; set; }
 
     public List<PassengerCreateDto> Passengers { get; set; } = new();
 }

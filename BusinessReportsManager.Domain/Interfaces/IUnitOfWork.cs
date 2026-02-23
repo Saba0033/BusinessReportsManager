@@ -17,8 +17,8 @@ public interface IUnitOfWork
     
     IGenericRepository<HotelBooking> HotelBookings { get; }
     IGenericRepository<ExtraService> ExtraServices { get; }
-    
-    
+    IGenericRepository<CustomerBankRequisites> CustomerBankRequisites { get; }
+
 
     Task<int> SaveChangesAsync();
 }
