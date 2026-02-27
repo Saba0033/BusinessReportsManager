@@ -7,7 +7,7 @@ namespace BusinessReportsManager.Application.DTOs.Tour;
 
 public class TourCreateDto
 {
-    public string Name { get; set; } = string.Empty;
+    public string Destination{ get; set; } = string.Empty;
 
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }

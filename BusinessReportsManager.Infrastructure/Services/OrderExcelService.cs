@@ -47,7 +47,7 @@ public class OrderExcelService : IOrderExcelService
             ("Party Name", order.Party.FullName),
             ("Party Email", order.Party.Email),
             ("Party Phone", order.Party.Phone ?? ""),
-            ("Tour Name", order.Tour.Name),
+            ("Tour Name", order.Tour.Destination),
             ("Tour Start", order.Tour.StartDate.ToString("yyyy-MM-dd")),
             ("Tour End", order.Tour.EndDate.ToString("yyyy-MM-dd")),
             ("Passenger Count", order.Tour.PassengerCount.ToString()),

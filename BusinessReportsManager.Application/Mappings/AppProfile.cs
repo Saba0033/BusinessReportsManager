@@ -126,8 +126,8 @@ public class AppProfile : Profile
         // TOUR
         // ======================================================
         CreateMap<Tour, TourDto>()
-            .ForMember(d => d.Supplier,
-                o => o.MapFrom(s => s.TourSupplier))
+           .ForMember(d => d.Destination, o => o.MapFrom(s => s.Name))
+           .ForMember(d => d.Supplier, o => o.MapFrom(s => s.TourSupplier))
             .ForMember(d => d.Passengers,
                 o => o.MapFrom(s => s.Passengers))
             .ForMember(d => d.AirTickets,
@@ -138,6 +138,7 @@ public class AppProfile : Profile
                 o => o.MapFrom(s => s.ExtraServices));
 
         CreateMap<TourCreateDto, Tour>()
+            .ForMember(d => d.Name, o => o.MapFrom(s => s.Destination))
             .ForMember(d => d.TourSupplier, o => o.Ignore())
             .ForMember(d => d.Passengers, o => o.Ignore())
             .ForMember(d => d.AirTickets, o => o.Ignore())
@@ -161,7 +162,8 @@ public class AppProfile : Profile
             .ForMember(d => d.AccountingComment, o => o.MapFrom(s => s.AccountingComment))
             .ForMember(d => d.AccountingCommentUpdatedAtUtc, o => o.MapFrom(s => s.AccountingCommentUpdatedAtUtc))
             .ForMember(d => d.AccountingCommentUpdatedById, o => o.MapFrom(s => s.AccountingCommentUpdatedById))
-            .ForMember(d => d.AccountingCommentUpdatedByEmail, o => o.MapFrom(s => s.AccountingCommentUpdatedByEmail));
+            .ForMember(d => d.AccountingCommentUpdatedByEmail, o => o.MapFrom(s => s.AccountingCommentUpdatedByEmail))
+            .ForMember(d => d.TotalExpenseInGel, o => o.MapFrom(s => s.TotalExpenseInGel));
 
         CreateMap<CustomerBankRequisites, CustomerBankRequisitesDto>();
         CreateMap<CustomerBankRequisitesCreateDto, CustomerBankRequisites>();

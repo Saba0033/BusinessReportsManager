@@ -1,5 +1,6 @@
 using AutoMapper;
 using BusinessReportsManager.Application.AbstractServices;
+using BusinessReportsManager.Application.DTOs;
 using BusinessReportsManager.Application.DTOs.Payment;
 using BusinessReportsManager.Domain.Entities;
 using BusinessReportsManager.Domain.Interfaces;
@@ -84,24 +85,9 @@ public class PaymentService : IPaymentService
     // -----------------------------------------
     public async Task<decimal> GetExpensesAsync(Guid orderId)
     {
-        var order = await _uow.Orders.Query()
-            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
-            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
-            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
-            .FirstOrDefaultAsync(o => o.Id == orderId);
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        return order?.TotalExpenseInGel ?? 0;
 
-        if (order == null) return 0;
-
-        decimal air = order.Tour.AirTickets.Sum(a =>
-            a.PriceCurrency.Amount * (a.PriceCurrency.ExchangeRateToGel ?? 1));
-
-        decimal hotel = order.Tour.HotelBookings.Sum(h =>
-            h.PriceCurrency.Amount * (h.PriceCurrency.ExchangeRateToGel ?? 1));
-
-        decimal extra = order.Tour.ExtraServices.Sum(e =>
-            e.PriceCurrency.Amount * (e.PriceCurrency.ExchangeRateToGel ?? 1));
-
-        return air + hotel + extra;
     }
 
     // -----------------------------------------
@@ -112,9 +98,7 @@ public class PaymentService : IPaymentService
         var order = await _uow.Orders.GetByIdAsync(orderId);
         if (order == null) return 0;
 
-        decimal expenses = await GetExpensesAsync(orderId);
-
-        return order.SellPriceInGel - expenses;
+        return order.SellPriceInGel - order.TotalExpenseInGel;
     }
 
     // -----------------------------------------
@@ -122,6 +106,45 @@ public class PaymentService : IPaymentService
     // -----------------------------------------
     public async Task<decimal> GetSupplierOwedAsync(Guid orderId)
     {
-        return await GetExpensesAsync(orderId);
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        return order?.TotalExpenseInGel ?? 0;
     }
+    public async Task<decimal> GetCustomerRemainingAsync(Guid orderId)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return 0;
+
+        var totalPaid = await GetTotalPaidAsync(orderId);
+
+        return order.SellPriceInGel - totalPaid;
+    }
+    public async Task<decimal> GetCashFlowAsync(Guid orderId)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return 0;
+
+        var totalPaid = await GetTotalPaidAsync(orderId);
+
+        return totalPaid - order.TotalExpenseInGel;
+    }
+    public async Task<OrderFinancialSummaryDto?> GetFinancialSummaryAsync(Guid orderId)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return null;
+
+        var totalPaid = await GetTotalPaidAsync(orderId);
+
+        return new OrderFinancialSummaryDto
+        {
+            OrderId = orderId,
+            SellPriceInGel = order.SellPriceInGel,
+            TotalExpenseInGel = order.TotalExpenseInGel,
+            TotalPaidInGel = totalPaid,
+            CustomerRemainingInGel = order.SellPriceInGel - totalPaid,
+            ProfitInGel = order.SellPriceInGel - order.TotalExpenseInGel,
+            CashFlowInGel = totalPaid - order.TotalExpenseInGel
+        };
+    }
+
+
 }

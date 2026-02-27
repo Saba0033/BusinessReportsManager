@@ -60,6 +60,7 @@ public class OrderService : IOrderService
             OrderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6]}",
             Source = dto.Source,
             SellPriceInGel = dto.SellPriceInGel,
+            TotalExpenseInGel = dto.TotalExpenseInGel,
             Status = OrderStatus.Open,
             OrderParty = party,
             Tour = tour,

@@ -1,5 +1,6 @@
 using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs.Payment;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BusinessReportsManager.API.Controllers;
@@ -101,5 +102,13 @@ public class PaymentController : ControllerBase
     {
         var owed = await _payments.GetSupplierOwedAsync(orderId);
         return Ok(owed);
+    }
+
+    [HttpGet("{orderId:guid}/financial-summary")]
+    [Authorize(Roles = "Supervisor,Accountant")]
+    public async Task<IActionResult> GetFinancialSummary(Guid orderId)
+    {
+        var summary = await _payments.GetFinancialSummaryAsync(orderId);
+        return summary == null ? NotFound() : Ok(summary);
     }
 }

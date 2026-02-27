@@ -14,6 +14,7 @@ public class OrderDto
     public string OrderNumber { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public decimal SellPriceInGel { get; set; }
+    public decimal TotalExpenseInGel { get; set; }
     public OrderStatus Status { get; set; }
     public string? AccountingComment { get; set; }
     public DateTime? AccountingCommentUpdatedAtUtc { get; set; }

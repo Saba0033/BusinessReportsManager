@@ -13,6 +13,7 @@ public class Order : BaseEntity
     public Tour? Tour { get; set; }
     public string Source { get; set; } = string.Empty;
     public decimal SellPriceInGel { get; set; } = 0;
+    public decimal TotalExpenseInGel { get; set; } = 0;
     public Guid? CustomerBankRequisitesId { get; set; }
     public CustomerBankRequisites? CustomerBankRequisites { get; set; }
     public string? AccountingComment { get; set; }
