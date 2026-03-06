@@ -15,7 +15,8 @@ public sealed class OrderPartyToPartyDtoResolver : IValueResolver<Order, object,
                 Id = p.Id,
                 FullName = $"{p.FirstName} {p.LastName}".Trim(),
                 Email = p.Email,
-                Phone = p.Phone
+                Phone = p.Phone,
+                PersonalNumber = p.PersonalNumber
             };
         }
 

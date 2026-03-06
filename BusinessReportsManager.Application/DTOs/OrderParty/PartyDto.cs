@@ -7,4 +7,6 @@ public class PartyDto
 
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
+
+    public string? PersonalNumber { get; set; }
 }

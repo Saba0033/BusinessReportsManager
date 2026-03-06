@@ -62,7 +62,7 @@ public class OrderService : IOrderService
             SellPriceInGel = dto.SellPriceInGel,
             TotalExpenseInGel = dto.TotalExpenseInGel,
             Status = OrderStatus.Open,
-            OrderParty = party,
+            OrderPartyId = party.Id,
             Tour = tour,
             CreatedById = Guid.Parse(userId),
             CreatedByEmail = email,
@@ -230,37 +230,102 @@ public class OrderService : IOrderService
 
     private async Task<PersonParty> GetOrCreatePersonPartyAsync(PartyCreateDto dto)
     {
+        if (dto == null) throw new ArgumentNullException(nameof(dto));
+
+        var normalizedEmail = NormalizeEmail(dto.Email);
+        var normalizedPn = NormalizePersonalNumber(dto.PersonalNumber);
+
+        // 1) If FE sends Id ? reuse
         if (dto.Id.HasValue && dto.Id.Value != Guid.Empty)
         {
-            var id = dto.Id.Value;
-
-            var existing = await _uow.OrderParties.Query()
+            var existingById = await _uow.OrderParties.Query()
                 .OfType<PersonParty>()
-                .FirstOrDefaultAsync(p => p.Id == id);
+                .FirstOrDefaultAsync(p => p.Id == dto.Id.Value);
 
-            if (existing != null)
+            if (existingById != null)
             {
-                ApplyFullName(existing, dto.FullName);
-                existing.Email = dto.Email;
-                existing.Phone = dto.Phone;
-                return existing;
+                UpdatePersonParty(existingById, dto, normalizedEmail, normalizedPn);
+                return existingById;
             }
-
-            // If FE sends an id but it's not found, just create new
-            // (optional: log a warning)
         }
+
+        // 2) Try match by PersonalNumber (best identity)
+        if (!string.IsNullOrWhiteSpace(normalizedPn))
+        {
+            var existingByPn = await _uow.OrderParties.Query()
+                .OfType<PersonParty>()
+                .FirstOrDefaultAsync(p => p.PersonalNumber == normalizedPn);
+
+            if (existingByPn != null)
+            {
+                UpdatePersonParty(existingByPn, dto, normalizedEmail, normalizedPn);
+                return existingByPn;
+            }
+        }
+
+        // 3) Fallback: match by Email
+        if (!string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            var existingByEmail = await _uow.OrderParties.Query()
+                .OfType<PersonParty>()
+                .FirstOrDefaultAsync(p => p.Email == normalizedEmail);
+
+            if (existingByEmail != null)
+            {
+                UpdatePersonParty(existingByEmail, dto, normalizedEmail, normalizedPn);
+                return existingByEmail;
+            }
+        }
+
+        // 4) Create new
+        var (first, last) = SplitFullName(dto.FullName);
 
         var party = new PersonParty
         {
-            Email = dto.Email,
-            Phone = dto.Phone
+            FirstName = first,
+            LastName = last,
+            Email = normalizedEmail ?? string.Empty, // your entity seems to have Email required in base
+            Phone = dto.Phone,
+            PersonalNumber = normalizedPn
         };
 
-        ApplyFullName(party, dto.FullName);
         await _uow.OrderParties.AddAsync(party);
-
         return party;
     }
+
+    private void UpdatePersonParty(PersonParty party, PartyCreateDto dto, string? normalizedEmail, string? normalizedPn)
+    {
+        var (first, last) = SplitFullName(dto.FullName);
+
+        // Update names if provided
+        if (!string.IsNullOrWhiteSpace(first)) party.FirstName = first;
+        if (!string.IsNullOrWhiteSpace(last)) party.LastName = last;
+
+        // Update identity/contact
+        if (!string.IsNullOrWhiteSpace(normalizedEmail)) party.Email = normalizedEmail;
+        party.Phone = dto.Phone;
+        party.PersonalNumber = normalizedPn;
+    }
+
+    private static (string firstName, string lastName) SplitFullName(string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+            return (string.Empty, string.Empty);
+
+        var parts = fullName.Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 1)
+            return (parts[0], string.Empty);
+
+        return (parts[0], string.Join(" ", parts.Skip(1)));
+    }
+
+    private static string? NormalizeEmail(string? email)
+        => string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLower();
+
+    private static string? NormalizePersonalNumber(string? pn)
+        => string.IsNullOrWhiteSpace(pn) ? null : pn.Trim();
 
 
 

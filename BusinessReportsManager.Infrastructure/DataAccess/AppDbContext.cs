@@ -36,6 +36,15 @@ public class AppDbContext : IdentityDbContext<AppUser>
         modelBuilder.Entity<OrderParty>()
             .Property<string>("PartyType")
             .HasMaxLength(20);
+        modelBuilder.Entity<PersonParty>(builder =>
+        {
+            builder.Property(p => p.PersonalNumber)
+                .HasMaxLength(20);
+
+            builder.HasIndex(p => p.PersonalNumber)
+                .IsUnique()
+                .HasFilter("\"PartyType\" = 'Person' AND \"PersonalNumber\" IS NOT NULL");
+        });
 
         // ---- Tour configuration ----
         modelBuilder.Entity<Tour>(b =>

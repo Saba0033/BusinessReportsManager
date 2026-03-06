@@ -13,6 +13,7 @@ public sealed class PersonParty : OrderParty
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public DateOnly? BirthDate { get; set; }
+    public string? PersonalNumber { get; set; }
 }
 
 public sealed class CompanyParty : OrderParty
