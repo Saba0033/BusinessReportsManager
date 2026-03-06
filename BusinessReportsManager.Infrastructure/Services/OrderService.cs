@@ -563,6 +563,143 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
 
   
 
+    // ---------------------------------------------------
+    // REPORT QUERIES (flat DTO)
+    // ---------------------------------------------------
+    public async Task<List<OrderReportDto>> GetAllReportAsync()
+    {
+        var orders = await LoadOrdersWithFullGraph().ToListAsync();
+        return MapToReportDtos(orders);
+    }
+
+    public async Task<List<OrderReportDto>> GetReportByStatusAsync(OrderStatus status)
+    {
+        var orders = await LoadOrdersWithFullGraph()
+            .Where(o => o.Status == status)
+            .ToListAsync();
+        return MapToReportDtos(orders);
+    }
+
+    public async Task<List<OrderReportDto>> GetReportByPartyAsync(Guid partyId)
+    {
+        var orders = await LoadOrdersWithFullGraph()
+            .Where(o => o.OrderPartyId == partyId)
+            .ToListAsync();
+        return MapToReportDtos(orders);
+    }
+
+    public async Task<List<OrderReportDto>> GetReportByDateRangeAsync(DateTime start, DateTime end)
+    {
+        var orders = await LoadOrdersWithFullGraph()
+            .Where(o => o.CreatedAtUtc >= start && o.CreatedAtUtc <= end)
+            .ToListAsync();
+        return MapToReportDtos(orders);
+    }
+
+    public async Task<List<OrderReportDto>> SearchReportAsync(string? tourName, DateOnly? startDate, DateOnly? endDate)
+    {
+        var q = LoadOrdersWithFullGraph();
+
+        if (!string.IsNullOrWhiteSpace(tourName))
+            q = q.Where(o => o.Tour != null && EF.Functions.ILike(o.Tour.Name, $"%{tourName.Trim()}%"));
+
+        if (startDate.HasValue)
+            q = q.Where(o => o.Tour != null && o.Tour.StartDate >= startDate.Value);
+
+        if (endDate.HasValue)
+            q = q.Where(o => o.Tour != null && o.Tour.EndDate <= endDate.Value);
+
+        var orders = await q.ToListAsync();
+        return MapToReportDtos(orders);
+    }
+
+    private IQueryable<Order> LoadOrdersWithFullGraph()
+    {
+        return _uow.Orders.Query()
+            .Include(o => o.OrderParty)
+            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier);
+    }
+
+    private List<OrderReportDto> MapToReportDtos(List<Order> orders)
+    {
+        var result = new List<OrderReportDto>(orders.Count);
+
+        foreach (var o in orders)
+        {
+            var totalPaid = o.Payments
+                .Where(p => p.PriceCurrency != null)
+                .Sum(p => p.PriceCurrency!.PriceInGel ?? 0);
+
+            var partyName = o.OrderParty is PersonParty pp
+                ? $"{pp.FirstName} {pp.LastName}".Trim()
+                : string.Empty;
+
+            var passengers = o.Tour?.Passengers ?? (ICollection<Passenger>)new List<Passenger>();
+            var passengerNames = string.Join(", ",
+                passengers.Select(p => $"{p.FirstName} {p.LastName}".Trim()));
+
+            var airTickets = o.Tour?.AirTickets ?? (ICollection<AirTicket>)new List<AirTicket>();
+            var ticketTotal = airTickets
+                .Where(t => t.PriceCurrency != null)
+                .Sum(t => t.PriceCurrency!.PriceInGel ?? 0);
+            var ticketSuppliers = string.Join(", ",
+                airTickets.Select(t => t.FlightCompanyName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
+
+            var hotels = o.Tour?.HotelBookings ?? (ICollection<HotelBooking>)new List<HotelBooking>();
+            var hotelTotal = hotels
+                .Where(h => h.PriceCurrency != null)
+                .Sum(h => h.PriceCurrency!.PriceInGel ?? 0);
+            var hotelSuppliers = string.Join(", ",
+                hotels.Select(h => h.HotelName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
+
+            var extras = (o.Tour?.ExtraServices ?? (ICollection<ExtraService>)new List<ExtraService>()).ToList();
+            var transfers = extras.Where(e => e.Description.Contains("transfer", StringComparison.OrdinalIgnoreCase)).ToList();
+            var insurance = extras.Where(e => e.Description.Contains("insurance", StringComparison.OrdinalIgnoreCase)).ToList();
+            var others = extras.Except(transfers).Except(insurance).ToList();
+
+            decimal SumGel(IEnumerable<ExtraService> items) =>
+                items.Where(e => e.PriceCurrency != null).Sum(e => e.PriceCurrency!.PriceInGel ?? 0);
+
+            string JoinDescs(IEnumerable<ExtraService> items) =>
+                string.Join(", ", items.Select(e => e.Description).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct());
+
+            result.Add(new OrderReportDto
+            {
+                Id = o.Id,
+                RentName = partyName,
+                NumberOfPax = o.Tour?.PassengerCount ?? 0,
+                ListOfPassengers = passengerNames,
+                OrderCreationDate = o.CreatedAtUtc,
+                ManagerName = o.CreatedByEmail ?? string.Empty,
+                TourName = o.Tour?.Name ?? string.Empty,
+                StartDate = o.Tour?.StartDate ?? default,
+                EndDate = o.Tour?.EndDate ?? default,
+                GrossPrice = o.SellPriceInGel,
+                TicketPrice = ticketTotal,
+                TicketSupplier = ticketSuppliers,
+                HotelPrice = hotelTotal,
+                HotelSupplier = hotelSuppliers,
+                TransferPrice = SumGel(transfers),
+                TransferSupplier = JoinDescs(transfers),
+                InsurancePrice = SumGel(insurance),
+                InsuranceSupplier = JoinDescs(insurance),
+                OtherServicePrice = SumGel(others),
+                OtherServiceSupplier = JoinDescs(others),
+                Profit = o.SellPriceInGel - o.TotalExpenseInGel,
+                PaidByClient = totalPaid,
+                LeftToPay = o.SellPriceInGel - totalPaid,
+                Currency = "GEL"
+            });
+        }
+
+        return result;
+    }
+
     //private async Task RebuildExtraServicesAsync(Order order, OrderEditDto dto)
     //{
     //    foreach (var e in order.Tour!.ExtraServices.ToList())
