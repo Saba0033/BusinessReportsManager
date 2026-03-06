@@ -157,8 +157,6 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderExcelService, OrderExcelService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
-builder.Services.AddScoped<ITourService, TourService>();
-
 builder.Services.AddAutoMapper(typeof(AppProfile));
 
 builder.Services.AddScoped<IUserService, UserService>();

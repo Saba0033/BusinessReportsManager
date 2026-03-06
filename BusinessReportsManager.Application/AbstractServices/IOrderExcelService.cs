@@ -1,6 +1,8 @@
+using BusinessReportsManager.Application.DTOs.Order;
+
 namespace BusinessReportsManager.Application.AbstractServices;
 
 public interface IOrderExcelService
 {
-    Task<byte[]> GenerateOrderExcelAsync(Guid orderId);
+    byte[] GenerateReportExcel(List<OrderReportDto> orders, string sheetName = "Report sample");
 }

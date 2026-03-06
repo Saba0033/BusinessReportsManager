@@ -40,7 +40,6 @@ public class OrderController : ControllerBase
         }
         catch (Exception ex)
         {
-            // TEMPORARY for debugging only (remove later)
             return StatusCode(500, new
             {
                 error = ex.Message,
@@ -63,17 +62,17 @@ public class OrderController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves all orders with full nested details.
+    /// Retrieves all orders as a flat report.
     /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    [ProducesResponseType(typeof(List<OrderReportDto>), 200)]
     public async Task<IActionResult> GetAll()
     {
-        return Ok(await _orders.GetAllAsync());
+        return Ok(await _orders.GetAllReportAsync());
     }
 
     /// <summary>
-    /// Retrieves a single order by ID.
+    /// Retrieves a single order by ID with full details.
     /// </summary>
     [HttpGet("{orderId:guid}")]
     [ProducesResponseType(typeof(OrderDto), 200)]
@@ -85,44 +84,44 @@ public class OrderController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves all orders with a specific status.
+    /// Retrieves all orders with a specific status as a flat report.
     /// </summary>
     [HttpGet("status/{status}")]
-    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    [ProducesResponseType(typeof(List<OrderReportDto>), 200)]
     public async Task<IActionResult> GetByStatus(OrderStatus status)
     {
-        return Ok(await _orders.GetByStatusAsync(status));
+        return Ok(await _orders.GetReportByStatusAsync(status));
     }
 
     /// <summary>
-    /// Retrieves all orders associated with a specific party.
+    /// Retrieves all orders associated with a specific party as a flat report.
     /// </summary>
     [HttpGet("party/{partyId:guid}")]
-    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    [ProducesResponseType(typeof(List<OrderReportDto>), 200)]
     public async Task<IActionResult> GetByParty(Guid partyId)
     {
-        return Ok(await _orders.GetByPartyAsync(partyId));
+        return Ok(await _orders.GetReportByPartyAsync(partyId));
     }
 
     /// <summary>
-    /// Retrieves all orders created within a date range.
+    /// Retrieves all orders created within a date range as a flat report.
     /// </summary>
     [HttpGet("date-range")]
-    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    [ProducesResponseType(typeof(List<OrderReportDto>), 200)]
     public async Task<IActionResult> GetByDateRange([FromQuery] DateTime start, [FromQuery] DateTime end)
     {
-        return Ok(await _orders.GetByDateRangeAsync(start, end));
+        return Ok(await _orders.GetReportByDateRangeAsync(start, end));
     }
 
     [HttpGet("search")]
     [Authorize(Roles = "Supervisor,Employee")]
-    [ProducesResponseType(typeof(List<OrderDto>), 200)]
+    [ProducesResponseType(typeof(List<OrderReportDto>), 200)]
     public async Task<IActionResult> Search(
     [FromQuery] string? tourName,
     [FromQuery] DateOnly? startDate,
     [FromQuery] DateOnly? endDate)
     {
-        return Ok(await _orders.SearchAsync(tourName, startDate, endDate));
+        return Ok(await _orders.SearchReportAsync(tourName, startDate, endDate));
     }
 
 
@@ -153,24 +152,17 @@ public class OrderController : ControllerBase
     }
 
     /// <summary>
-    /// Downloads the order information as an Excel file.
+    /// Downloads all orders as a flat Excel report.
     /// </summary>
-    [HttpGet("{orderId:guid}/export-excel")]
+    [HttpGet("export-excel")]
     [ProducesResponseType(200)]
-    [ProducesResponseType(404)]
-    public async Task<IActionResult> ExportExcel(Guid orderId)
+    public async Task<IActionResult> ExportExcel()
     {
-        try
-        {
-            var fileBytes = await _orderExcel.GenerateOrderExcelAsync(orderId);
-            return File(fileBytes,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                $"order-{orderId}.xlsx");
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
+        var reportData = await _orders.GetAllReportAsync();
+        var fileBytes = _orderExcel.GenerateReportExcel(reportData);
+        return File(fileBytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"Report sample_{Guid.NewGuid()}.xlsx");
     }
 
     [HttpPatch("{orderId:guid}/accounting-comment")]
