@@ -645,7 +645,6 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
                 NumberOfPax = o.Tour?.PassengerCount ?? 0,
                 ListOfPassengers = passengerNames,
                 OrderCreationDate = o.CreatedAtUtc,
-                ManagerName = o.CreatedByEmail ?? string.Empty,
                 StartDate = o.Tour?.StartDate ?? default,
                 EndDate = o.Tour?.EndDate ?? default,
                 GrossPrice = o.SellPriceInGel,

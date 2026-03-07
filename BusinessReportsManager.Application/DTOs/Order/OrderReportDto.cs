@@ -6,7 +6,6 @@ public class OrderReportDto
     public int NumberOfPax { get; set; }
     public string ListOfPassengers { get; set; } = string.Empty;
     public DateTime OrderCreationDate { get; set; }
-    public string ManagerName { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public decimal GrossPrice { get; set; }

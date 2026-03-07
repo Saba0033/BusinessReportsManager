@@ -16,7 +16,6 @@ public class OrderExcelService : IOrderExcelService
             "Number of pax in",
             "List of passengers",
             "Order creation date",
-            "Manager name",
             "Start date",
             "End date",
             "Gross price",
@@ -41,17 +40,16 @@ public class OrderExcelService : IOrderExcelService
             ws.Cell(row, 1).Value = o.NumberOfPax;
             ws.Cell(row, 2).Value = o.ListOfPassengers;
             ws.Cell(row, 3).Value = o.OrderCreationDate.ToString("M/d/yyyy");
-            ws.Cell(row, 4).Value = o.ManagerName;
-            ws.Cell(row, 5).Value = o.StartDate.ToString("M/d/yyyy");
-            ws.Cell(row, 6).Value = o.EndDate.ToString("M/d/yyyy");
-            ws.Cell(row, 7).Value = o.GrossPrice;
-            ws.Cell(row, 8).Value = o.TotalExpenses;
-            ws.Cell(row, 9).Value = o.Profit;
-            ws.Cell(row, 10).Value = o.PaidByClient;
-            ws.Cell(row, 11).Value = o.LeftToPay;
-            ws.Cell(row, 12).Value = o.Currency;
+            ws.Cell(row, 4).Value = o.StartDate.ToString("M/d/yyyy");
+            ws.Cell(row, 5).Value = o.EndDate.ToString("M/d/yyyy");
+            ws.Cell(row, 6).Value = o.GrossPrice;
+            ws.Cell(row, 7).Value = o.TotalExpenses;
+            ws.Cell(row, 8).Value = o.Profit;
+            ws.Cell(row, 9).Value = o.PaidByClient;
+            ws.Cell(row, 10).Value = o.LeftToPay;
+            ws.Cell(row, 11).Value = o.Currency;
 
-            for (var c = 7; c <= 11; c++)
+            for (var c = 6; c <= 10; c++)
                 ws.Cell(row, c).Style.NumberFormat.Format = "#,##0.00";
         }
 
