@@ -635,61 +635,21 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
                 .Where(p => p.PriceCurrency != null)
                 .Sum(p => p.PriceCurrency!.PriceInGel ?? 0);
 
-            var partyName = o.OrderParty is PersonParty pp
-                ? $"{pp.FirstName} {pp.LastName}".Trim()
-                : string.Empty;
-
             var passengers = o.Tour?.Passengers ?? (ICollection<Passenger>)new List<Passenger>();
             var passengerNames = string.Join(", ",
                 passengers.Select(p => $"{p.FirstName} {p.LastName}".Trim()));
 
-            var airTickets = o.Tour?.AirTickets ?? (ICollection<AirTicket>)new List<AirTicket>();
-            var ticketTotal = airTickets
-                .Where(t => t.PriceCurrency != null)
-                .Sum(t => t.PriceCurrency!.PriceInGel ?? 0);
-            var ticketSuppliers = string.Join(", ",
-                airTickets.Select(t => t.FlightCompanyName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
-
-            var hotels = o.Tour?.HotelBookings ?? (ICollection<HotelBooking>)new List<HotelBooking>();
-            var hotelTotal = hotels
-                .Where(h => h.PriceCurrency != null)
-                .Sum(h => h.PriceCurrency!.PriceInGel ?? 0);
-            var hotelSuppliers = string.Join(", ",
-                hotels.Select(h => h.HotelName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
-
-            var extras = (o.Tour?.ExtraServices ?? (ICollection<ExtraService>)new List<ExtraService>()).ToList();
-            var transfers = extras.Where(e => e.Description.Contains("transfer", StringComparison.OrdinalIgnoreCase)).ToList();
-            var insurance = extras.Where(e => e.Description.Contains("insurance", StringComparison.OrdinalIgnoreCase)).ToList();
-            var others = extras.Except(transfers).Except(insurance).ToList();
-
-            decimal SumGel(IEnumerable<ExtraService> items) =>
-                items.Where(e => e.PriceCurrency != null).Sum(e => e.PriceCurrency!.PriceInGel ?? 0);
-
-            string JoinDescs(IEnumerable<ExtraService> items) =>
-                string.Join(", ", items.Select(e => e.Description).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct());
-
             result.Add(new OrderReportDto
             {
                 Id = o.Id,
-                RentName = partyName,
                 NumberOfPax = o.Tour?.PassengerCount ?? 0,
                 ListOfPassengers = passengerNames,
                 OrderCreationDate = o.CreatedAtUtc,
                 ManagerName = o.CreatedByEmail ?? string.Empty,
-                TourName = o.Tour?.Name ?? string.Empty,
                 StartDate = o.Tour?.StartDate ?? default,
                 EndDate = o.Tour?.EndDate ?? default,
                 GrossPrice = o.SellPriceInGel,
-                TicketPrice = ticketTotal,
-                TicketSupplier = ticketSuppliers,
-                HotelPrice = hotelTotal,
-                HotelSupplier = hotelSuppliers,
-                TransferPrice = SumGel(transfers),
-                TransferSupplier = JoinDescs(transfers),
-                InsurancePrice = SumGel(insurance),
-                InsuranceSupplier = JoinDescs(insurance),
-                OtherServicePrice = SumGel(others),
-                OtherServiceSupplier = JoinDescs(others),
+                TotalExpenses = o.TotalExpenseInGel,
                 Profit = o.SellPriceInGel - o.TotalExpenseInGel,
                 PaidByClient = totalPaid,
                 LeftToPay = o.SellPriceInGel - totalPaid,
