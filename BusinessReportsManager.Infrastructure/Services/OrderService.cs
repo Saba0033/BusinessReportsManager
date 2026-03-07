@@ -45,13 +45,13 @@ public class OrderService : IOrderService
         if (dto.CustomerBankRequisites != null)
         {
             req = _mapper.Map<CustomerBankRequisites>(dto.CustomerBankRequisites);
-            await _uow.CustomerBankRequisites.AddAsync(req); ; // you'll add this repo to UoW
+            await _uow.CustomerBankRequisites.AddAsync(req);
         }
 
-        // 1) PARTY (link or create)
+        // 1) PARTY
         var party = await GetOrCreatePersonPartyAsync(dto.Party);
 
-        // 2) TOUR + nested graph
+        // 2) TOUR
         var tour = await CreateTourGraphAsync(dto);
 
         // 3) ORDER
@@ -72,7 +72,11 @@ public class OrderService : IOrderService
         await _uow.Orders.AddAsync(order);
         await _uow.SaveChangesAsync();
 
-        return _mapper.Map<OrderDto>(order);
+        var createdOrder = await LoadOrderGraphAsync(order.Id);
+        if (createdOrder == null)
+            throw new Exception("Created order could not be reloaded.");
+
+        return _mapper.Map<OrderDto>(createdOrder);
     }
 
 
@@ -93,7 +97,10 @@ public class OrderService : IOrderService
         await UpdatePartyAsync(order, dto.Party);
 
         // 3) TOUR ROOT
-        _mapper.Map(dto.Tour, order.Tour);
+        order.Tour.Name = dto.Destination;
+        order.Tour.StartDate = dto.StartDate;
+        order.Tour.EndDate = dto.EndDate;
+        order.Tour.PassengerCount = dto.PassengerCount;
 
         // 4) TOUR SUBCOLLECTIONS (full replace)
         await RebuildPassengersAsync(order, dto);
@@ -355,10 +362,16 @@ public class OrderService : IOrderService
 
     private async Task<Tour> CreateTourGraphAsync(OrderCreateDto dto)
     {
-        var tour = _mapper.Map<Tour>(dto.Tour);
+        var tour = new Tour
+        {
+            Name = dto.Destination,
+            StartDate = dto.StartDate,
+            EndDate = dto.EndDate,
+            PassengerCount = dto.PassengerCount
+        };
 
         // Supplier
-        var supplier = _mapper.Map<Supplier>(dto.Tour.Supplier);
+        var supplier = _mapper.Map<Supplier>(dto.Supplier);
         tour.TourSupplier = supplier;
 
         await _uow.Tours.AddAsync(tour);
@@ -372,7 +385,7 @@ public class OrderService : IOrderService
         }
 
         // Air tickets
-        foreach (var t in dto.Tour.AirTickets)
+        foreach (var t in dto.AirTickets)
         {
             var ticket = _mapper.Map<AirTicket>(t);
             ticket.Tour = tour;
@@ -385,8 +398,8 @@ public class OrderService : IOrderService
             await _uow.AirTickets.AddAsync(ticket);
         }
 
-        // Hotel bookings (now only Price in dto)
-        foreach (var h in dto.Tour.HotelBookings)
+        // Hotel bookings
+        foreach (var h in dto.HotelBookings)
         {
             var hotel = _mapper.Map<HotelBooking>(h);
             hotel.Tour = tour;
@@ -398,8 +411,6 @@ public class OrderService : IOrderService
             await _uow.PriceCurrencies.AddAsync(price);
             await _uow.HotelBookings.AddAsync(hotel);
         }
-
-        // ExtraServices removed from create payload => don't create them here
 
         return tour;
     }
@@ -475,7 +486,7 @@ public class OrderService : IOrderService
         }
         order.Tour.AirTickets.Clear();
 
-        foreach (var tDto in dto.Tour.AirTickets)
+        foreach (var tDto in dto.AirTickets)
         {
             var ticket = _mapper.Map<AirTicket>(tDto);
             ticket.Tour = order.Tour;
@@ -499,7 +510,7 @@ public class OrderService : IOrderService
         }
         order.Tour.HotelBookings.Clear();
 
-        foreach (var hDto in dto.Tour.HotelBookings)
+        foreach (var hDto in dto.HotelBookings)
         {
             var hotel = _mapper.Map<HotelBooking>(hDto);
             hotel.Tour = order.Tour;
