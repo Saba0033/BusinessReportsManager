@@ -21,6 +21,7 @@ public interface IOrderService
     Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startDate, DateOnly? endDate);
     Task<bool> UpdateAccountingCommentAsync(Guid orderId, string? comment);
 
+    Task<OrderReportDto?> GetByIdReportAsync(Guid id);
     Task<List<OrderReportDto>> GetAllReportAsync();
     Task<List<OrderReportDto>> GetReportByStatusAsync(OrderStatus status);
     Task<List<OrderReportDto>> GetReportByPartyAsync(Guid partyId);

@@ -16,9 +16,6 @@ public class AuthController : ControllerBase
         _auth = auth;
     }
 
-    // ===========================
-    //        LOGIN
-    // ===========================
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> Login(
@@ -36,60 +33,15 @@ public class AuthController : ControllerBase
         }
     }
 
-    // ===========================
-    //    REGISTER EMPLOYEE
-    //    NO AUTH REQUIRED
-    // ===========================
-    [HttpPost("register/employee")]
-    [AllowAnonymous] 
-    public async Task<ActionResult<RegisterResponse>> RegisterEmployee(
+    [HttpPost("register")]
+    [AllowAnonymous]
+    public async Task<ActionResult<RegisterResponse>> Register(
         RegisterRequest request,
         CancellationToken ct)
     {
         try
         {
-         
-            return Ok(await _auth.RegisterAsync(request, "Employee", ct));
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
-
-    // ===========================
-    //   REGISTER ACCOUNTANT
-    //   SUPERVISOR OR ADMIN
-    // ===========================
-    [HttpPost("register/accountant")]
-    [Authorize(Roles = "Supervisor,Accountant")]
-    public async Task<ActionResult<RegisterResponse>> RegisterAccountant(
-        RegisterRequest request,
-        CancellationToken ct)
-    {
-        try
-        {
-            return Ok(await _auth.RegisterAsync(request, "Accountant",ct));
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
-
-    // ===========================
-    //   REGISTER SUPERVISOR
-    //   ADMIN ONLY
-    // ===========================
-    [HttpPost("register/supervisor")]
-    [Authorize(Roles = "Supervisor")]
-    public async Task<ActionResult<RegisterResponse>> RegisterSupervisor(
-        RegisterRequest request,
-        CancellationToken ct)
-    {
-        try
-        {
-            return Ok(await _auth.RegisterAsync(request, "Supervisor", ct));
+            return Ok(await _auth.RegisterAsync(request, request.Role, ct));
         }
         catch (Exception ex)
         {

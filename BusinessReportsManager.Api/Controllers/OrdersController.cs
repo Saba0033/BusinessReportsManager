@@ -72,14 +72,14 @@ public class OrderController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves a single order by ID with full details.
+    /// Retrieves a single order by ID.
     /// </summary>
     [HttpGet("{orderId:guid}")]
-    [ProducesResponseType(typeof(OrderDto), 200)]
+    [ProducesResponseType(typeof(OrderReportDto), 200)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetById(Guid orderId)
     {
-        var result = await _orders.GetByIdAsync(orderId);
+        var result = await _orders.GetByIdReportAsync(orderId);
         return result is null ? NotFound() : Ok(result);
     }
 

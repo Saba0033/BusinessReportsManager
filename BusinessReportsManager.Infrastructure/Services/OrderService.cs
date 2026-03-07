@@ -566,6 +566,14 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
     // ---------------------------------------------------
     // REPORT QUERIES (flat DTO)
     // ---------------------------------------------------
+    public async Task<OrderReportDto?> GetByIdReportAsync(Guid id)
+    {
+        var order = await LoadOrdersWithFullGraph()
+            .FirstOrDefaultAsync(o => o.Id == id);
+        if (order == null) return null;
+        return MapToReportDtos(new List<Order> { order }).FirstOrDefault();
+    }
+
     public async Task<List<OrderReportDto>> GetAllReportAsync()
     {
         var orders = await LoadOrdersWithFullGraph().ToListAsync();
