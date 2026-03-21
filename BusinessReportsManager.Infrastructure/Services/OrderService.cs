@@ -211,8 +211,14 @@ public class OrderService : IOrderService
     public async Task<List<OrderDto>> GetByStatusAsync(OrderStatus status)
     {
         var orders = await _uow.Orders.Query(o => o.Status == status)
+            .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
-            .Include(o => o.Tour)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
@@ -221,8 +227,14 @@ public class OrderService : IOrderService
     public async Task<List<OrderDto>> GetByPartyAsync(Guid partyId)
     {
         var orders = await _uow.Orders.Query(o => o.OrderPartyId == partyId)
+            .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
-            .Include(o => o.Tour)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
@@ -232,8 +244,14 @@ public class OrderService : IOrderService
     {
         var orders = await _uow.Orders.Query(o =>
                 o.CreatedAtUtc >= start && o.CreatedAtUtc <= end)
+            .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
-            .Include(o => o.Tour)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
@@ -588,11 +606,13 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
 {
     var q = _uow.Orders.Query()
         .Include(o => o.OrderParty)
+        .Include(o => o.CustomerBankRequisites)
         .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.Passengers)
         .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+        .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
         .AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(tourName))
