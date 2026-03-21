@@ -241,11 +241,21 @@ public static class AppDbSeeder
         // ==========================================================
         var order = new Order
         {
-            OrderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-0001",
+            OrderNumber = 1,
             OrderParty = party,
             Tour = tour,
             Source = "SeedData",
             SellPriceInGel = 3000m,
+            TotalExpenseInGel = 2500m,
+            TicketNet = 500m,
+            TicketSupplier = "HORIZON",
+            HotelNet = 1300m,
+            HotelSupplier = "Costa",
+            TransferNet = 100m,
+            TransferSupplier = "TBO",
+            InsuranceNet = 5m,
+            InsuranceSupplier = "IMEDI L",
+            OtherServiceNet = 0m,
             Status = OrderStatus.Open
         };
         db.Orders.Add(order);

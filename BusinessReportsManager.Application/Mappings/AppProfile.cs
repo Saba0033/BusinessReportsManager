@@ -159,11 +159,33 @@ public class AppProfile : Profile
                 o => o.MapFrom(s => s.CreatedById))
             .ForMember(d => d.CreatedByEmail,
                 o => o.MapFrom(s => s.CreatedByEmail))
+            .ForMember(d => d.ManagerName, o => o.MapFrom(s => s.ManagerName))
             .ForMember(d => d.AccountingComment, o => o.MapFrom(s => s.AccountingComment))
             .ForMember(d => d.AccountingCommentUpdatedAtUtc, o => o.MapFrom(s => s.AccountingCommentUpdatedAtUtc))
             .ForMember(d => d.AccountingCommentUpdatedById, o => o.MapFrom(s => s.AccountingCommentUpdatedById))
             .ForMember(d => d.AccountingCommentUpdatedByEmail, o => o.MapFrom(s => s.AccountingCommentUpdatedByEmail))
-            .ForMember(d => d.TotalExpenseInGel, o => o.MapFrom(s => s.TotalExpenseInGel));
+            .ForMember(d => d.TotalExpenseInGel, o => o.MapFrom(s => s.TotalExpenseInGel))
+            .ForMember(d => d.TourType, o => o.MapFrom(s => s.TourType))
+            .ForMember(d => d.TicketNet, o => o.MapFrom(s => s.TicketNet))
+            .ForMember(d => d.TicketSupplier, o => o.MapFrom(s => s.TicketSupplier))
+            .ForMember(d => d.HotelNet, o => o.MapFrom(s => s.HotelNet))
+            .ForMember(d => d.HotelSupplier, o => o.MapFrom(s => s.HotelSupplier))
+            .ForMember(d => d.TransferNet, o => o.MapFrom(s => s.TransferNet))
+            .ForMember(d => d.TransferSupplier, o => o.MapFrom(s => s.TransferSupplier))
+            .ForMember(d => d.InsuranceNet, o => o.MapFrom(s => s.InsuranceNet))
+            .ForMember(d => d.InsuranceSupplier, o => o.MapFrom(s => s.InsuranceSupplier))
+            .ForMember(d => d.OtherServiceNet, o => o.MapFrom(s => s.OtherServiceNet))
+            .ForMember(d => d.OtherServiceSupplier, o => o.MapFrom(s => s.OtherServiceSupplier))
+            .ForMember(d => d.PaidByClient, o => o.MapFrom(s =>
+                (s.Payments ?? new List<Payment>())
+                    .Where(p => p.PriceCurrency != null)
+                    .Sum(p => p.PriceCurrency!.Amount * (p.PriceCurrency.ExchangeRateToGel ?? 1))))
+            .ForMember(d => d.LeftToPay, o => o.MapFrom(s =>
+                s.SellPriceInGel -
+                (s.Payments ?? new List<Payment>())
+                    .Where(p => p.PriceCurrency != null)
+                    .Sum(p => p.PriceCurrency!.Amount * (p.PriceCurrency.ExchangeRateToGel ?? 1))))
+            .ForMember(d => d.Profit, o => o.MapFrom(s => s.SellPriceInGel - s.TotalExpenseInGel));
 
         CreateMap<CustomerBankRequisites, CustomerBankRequisitesDto>();
         CreateMap<CustomerBankRequisitesCreateDto, CustomerBankRequisites>();

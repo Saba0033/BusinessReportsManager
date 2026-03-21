@@ -55,12 +55,26 @@ public class OrderService : IOrderService
         var tour = await CreateTourGraphAsync(dto);
 
         // 3) ORDER
+        var nextOrderNumber = await GetNextOrderNumberAsync();
+
         var order = new Order
         {
-            OrderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6]}",
+            OrderNumber = nextOrderNumber,
             Source = dto.Source,
+            TourType = dto.TourType,
+            ManagerName = dto.ManagerName,
             SellPriceInGel = dto.SellPriceInGel,
             TotalExpenseInGel = dto.TotalExpenseInGel,
+            TicketNet = dto.TicketNet,
+            TicketSupplier = dto.TicketSupplier,
+            HotelNet = dto.HotelNet,
+            HotelSupplier = dto.HotelSupplier,
+            TransferNet = dto.TransferNet,
+            TransferSupplier = dto.TransferSupplier,
+            InsuranceNet = dto.InsuranceNet,
+            InsuranceSupplier = dto.InsuranceSupplier,
+            OtherServiceNet = dto.OtherServiceNet,
+            OtherServiceSupplier = dto.OtherServiceSupplier,
             Status = OrderStatus.Open,
             OrderPartyId = party.Id,
             Tour = tour,
@@ -91,7 +105,20 @@ public class OrderService : IOrderService
 
         // 1) SIMPLE ORDER FIELDS
         order.Source = dto.Source;
+        order.TourType = dto.TourType;
+        order.ManagerName = dto.ManagerName;
         order.SellPriceInGel = dto.SellPriceInGel;
+        order.TotalExpenseInGel = dto.TotalExpenseInGel;
+        order.TicketNet = dto.TicketNet;
+        order.TicketSupplier = dto.TicketSupplier;
+        order.HotelNet = dto.HotelNet;
+        order.HotelSupplier = dto.HotelSupplier;
+        order.TransferNet = dto.TransferNet;
+        order.TransferSupplier = dto.TransferSupplier;
+        order.InsuranceNet = dto.InsuranceNet;
+        order.InsuranceSupplier = dto.InsuranceSupplier;
+        order.OtherServiceNet = dto.OtherServiceNet;
+        order.OtherServiceSupplier = dto.OtherServiceSupplier;
 
         // 2) PARTY (person-only)
         await UpdatePartyAsync(order, dto.Party);
@@ -153,11 +180,13 @@ public class OrderService : IOrderService
     {
         var orders = await _uow.Orders.Query()
             .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
@@ -167,11 +196,13 @@ public class OrderService : IOrderService
     {
         var order = await _uow.Orders.Query()
             .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .FirstOrDefaultAsync(o => o.Id == id);
 
         return order == null ? null : _mapper.Map<OrderDto>(order);
@@ -180,8 +211,14 @@ public class OrderService : IOrderService
     public async Task<List<OrderDto>> GetByStatusAsync(OrderStatus status)
     {
         var orders = await _uow.Orders.Query(o => o.Status == status)
+            .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
-            .Include(o => o.Tour)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
@@ -190,8 +227,14 @@ public class OrderService : IOrderService
     public async Task<List<OrderDto>> GetByPartyAsync(Guid partyId)
     {
         var orders = await _uow.Orders.Query(o => o.OrderPartyId == partyId)
+            .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
-            .Include(o => o.Tour)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
@@ -201,8 +244,14 @@ public class OrderService : IOrderService
     {
         var orders = await _uow.Orders.Query(o =>
                 o.CreatedAtUtc >= start && o.CreatedAtUtc <= end)
+            .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
-            .Include(o => o.Tour)
+            .Include(o => o.Tour).ThenInclude(t => t.Passengers)
+            .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+            .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
             .ToListAsync();
 
         return _mapper.Map<List<OrderDto>>(orders);
@@ -229,6 +278,14 @@ public class OrderService : IOrderService
         await _uow.SaveChangesAsync();
 
         return true;
+    }
+
+    private async Task<int> GetNextOrderNumberAsync()
+    {
+        var max = await _uow.Orders.Query()
+            .Select(o => (int?)o.OrderNumber)
+            .MaxAsync() ?? 0;
+        return max + 1;
     }
 
     // ===================================================
@@ -420,6 +477,7 @@ public class OrderService : IOrderService
     {
         return await _uow.Orders.Query()
             .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
@@ -527,7 +585,7 @@ public class OrderService : IOrderService
     {
         var customers = await _uow.Orders.Query()
             .GroupBy(o => o.OrderPartyId)
-            .Where(g => g.Count() >= 3)
+            .Where(g => g.Count() >= 2)
             .Select(g => g.Key)
             .Join(
                 _uow.OrderParties.Query().OfType<PersonParty>(),
@@ -548,11 +606,13 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
 {
     var q = _uow.Orders.Query()
         .Include(o => o.OrderParty)
+        .Include(o => o.CustomerBankRequisites)
         .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.Passengers)
         .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.ExtraServices).ThenInclude(e => e.PriceCurrency)
+        .Include(o => o.Tour).ThenInclude(t => t.TourSupplier)
         .AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(tourName))
@@ -636,6 +696,7 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
     {
         return _uow.Orders.Query()
             .Include(o => o.OrderParty)
+            .Include(o => o.CustomerBankRequisites)
             .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
@@ -658,16 +719,34 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
             var passengerNames = string.Join(", ",
                 passengers.Select(p => $"{p.FirstName} {p.LastName}".Trim()));
 
+            var clientName = string.Empty;
+            if (o.OrderParty is PersonParty person)
+                clientName = $"{person.FirstName} {person.LastName}".Trim();
+
             result.Add(new OrderReportDto
             {
                 Id = o.Id,
+                OrderNo = o.OrderNumber,
+                ClientName = clientName,
                 NumberOfPax = o.Tour?.PassengerCount ?? 0,
                 ListOfPassengers = passengerNames,
                 OrderCreationDate = o.CreatedAtUtc,
+                ManagerName = o.ManagerName,
+                TourName = o.Tour?.Name,
+                TourType = o.TourType,
                 StartDate = o.Tour?.StartDate ?? default,
                 EndDate = o.Tour?.EndDate ?? default,
                 GrossPrice = o.SellPriceInGel,
-                TotalExpenses = o.TotalExpenseInGel,
+                TicketNet = o.TicketNet,
+                TicketSupplier = o.TicketSupplier,
+                HotelNet = o.HotelNet,
+                HotelSupplier = o.HotelSupplier,
+                TransferNet = o.TransferNet,
+                TransferSupplier = o.TransferSupplier,
+                InsuranceNet = o.InsuranceNet,
+                InsuranceSupplier = o.InsuranceSupplier,
+                OtherServiceNet = o.OtherServiceNet,
+                OtherServiceSupplier = o.OtherServiceSupplier,
                 Profit = o.SellPriceInGel - o.TotalExpenseInGel,
                 PaidByClient = totalPaid,
                 LeftToPay = o.SellPriceInGel - totalPaid,
