@@ -104,6 +104,9 @@ public class AppDbContext : IdentityDbContext<AppUser>
         {
             b.HasIndex(o => o.OrderNumber).IsUnique();
 
+            b.Property(o => o.OrderNumber)
+                .IsRequired();
+
             // PostgreSQL-native optimistic concurrency using xmin
             b.Property<uint>("xmin")
                 .IsRowVersion()
@@ -119,9 +122,17 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .HasForeignKey(o => o.TourId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // SellPriceInGel is a simple decimal now; no value object
             b.Property(o => o.SellPriceInGel)
                 .HasColumnType("numeric(18,2)");
+
+            b.Property(o => o.TotalExpenseInGel)
+                .HasColumnType("numeric(18,2)");
+
+            b.Property(o => o.TicketNet).HasColumnType("numeric(18,2)");
+            b.Property(o => o.HotelNet).HasColumnType("numeric(18,2)");
+            b.Property(o => o.TransferNet).HasColumnType("numeric(18,2)");
+            b.Property(o => o.InsuranceNet).HasColumnType("numeric(18,2)");
+            b.Property(o => o.OtherServiceNet).HasColumnType("numeric(18,2)");
 
             // Order ↔ Payments
             b.HasMany(o => o.Payments)
