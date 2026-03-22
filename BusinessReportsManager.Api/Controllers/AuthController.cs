@@ -1,7 +1,9 @@
 using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs;
+using BusinessReportsManager.Api.SwaggerExamples;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Filters;
 
 namespace BusinessReportsManager.Api.Controllers;
 
@@ -18,6 +20,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [SwaggerRequestExample(typeof(LoginRequest), typeof(LoginRequestExample))]
     public async Task<ActionResult<LoginResponse>> Login(
         LoginRequest request,
         CancellationToken ct)
@@ -35,6 +38,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("register")]
     [AllowAnonymous]
+    [SwaggerRequestExample(typeof(RegisterRequest), typeof(RegisterRequestExample))]
     public async Task<ActionResult<RegisterResponse>> Register(
         RegisterRequest request,
         CancellationToken ct)

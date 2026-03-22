@@ -1,7 +1,9 @@
 using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs.Payment;
+using BusinessReportsManager.Api.SwaggerExamples;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Filters;
 
 namespace BusinessReportsManager.API.Controllers;
 
@@ -25,6 +27,7 @@ public class PaymentController : ControllerBase
     [HttpPost("{orderId:guid}")]
     [ProducesResponseType(typeof(PaymentDto), 200)]
     [ProducesResponseType(404)]
+    [SwaggerRequestExample(typeof(PaymentCreateDto), typeof(PaymentCreateDtoExample))]
     public async Task<IActionResult> AddPayment(Guid orderId, [FromBody] PaymentCreateDto dto)
     {
         var result = await _payments.AddPaymentAsync(orderId, dto);
