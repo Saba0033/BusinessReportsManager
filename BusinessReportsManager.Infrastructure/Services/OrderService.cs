@@ -62,7 +62,7 @@ public class OrderService : IOrderService
             OrderNumber = nextOrderNumber,
             Source = dto.Source,
             TourType = dto.TourType,
-            ManagerName = dto.ManagerName,
+            ManagerName = ResolveManagerName(user, dto.ManagerName),
             SellPriceInGel = dto.SellPriceInGel,
             TotalExpenseInGel = dto.TotalExpenseInGel,
             TicketNet = dto.TicketNet,
@@ -103,10 +103,12 @@ public class OrderService : IOrderService
         var order = await LoadOrderGraphAsync(orderId);
         if (order == null) return null;
 
+        var user = _contextAccessor.HttpContext?.User;
+
         // 1) SIMPLE ORDER FIELDS
         order.Source = dto.Source;
         order.TourType = dto.TourType;
-        order.ManagerName = dto.ManagerName;
+        order.ManagerName = ResolveManagerName(user, dto.ManagerName);
         order.SellPriceInGel = dto.SellPriceInGel;
         order.TotalExpenseInGel = dto.TotalExpenseInGel;
         order.TicketNet = dto.TicketNet;
@@ -286,6 +288,12 @@ public class OrderService : IOrderService
             .Select(o => (int?)o.OrderNumber)
             .MaxAsync() ?? 0;
         return max + 1;
+    }
+
+    private static string? ResolveManagerName(ClaimsPrincipal? user, string? dtoFallback)
+    {
+        var fromJwt = user?.FindFirst(ClaimTypes.Name)?.Value;
+        return string.IsNullOrWhiteSpace(fromJwt) ? dtoFallback : fromJwt;
     }
 
     // ===================================================
