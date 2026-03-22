@@ -62,7 +62,7 @@ public class OrderService : IOrderService
             OrderNumber = nextOrderNumber,
             Source = dto.Source,
             TourType = dto.TourType,
-            ManagerName = dto.ManagerName,
+            ManagerName = ResolveManagerName(user, dto.ManagerName),
             SellPriceInGel = dto.SellPriceInGel,
             TotalExpenseInGel = dto.TotalExpenseInGel,
             TicketNet = dto.TicketNet,
@@ -103,10 +103,12 @@ public class OrderService : IOrderService
         var order = await LoadOrderGraphAsync(orderId);
         if (order == null) return null;
 
+        var user = _contextAccessor.HttpContext?.User;
+
         // 1) SIMPLE ORDER FIELDS
         order.Source = dto.Source;
         order.TourType = dto.TourType;
-        order.ManagerName = dto.ManagerName;
+        order.ManagerName = ResolveManagerName(user, dto.ManagerName);
         order.SellPriceInGel = dto.SellPriceInGel;
         order.TotalExpenseInGel = dto.TotalExpenseInGel;
         order.TicketNet = dto.TicketNet;
@@ -288,6 +290,12 @@ public class OrderService : IOrderService
         return max + 1;
     }
 
+    private static string? ResolveManagerName(ClaimsPrincipal? user, string? dtoFallback)
+    {
+        var fromJwt = user?.FindFirst(ClaimTypes.Name)?.Value;
+        return string.IsNullOrWhiteSpace(fromJwt) ? dtoFallback : fromJwt;
+    }
+
     // ===================================================
     // PRIVATE HELPERS
     // ===================================================
@@ -299,21 +307,7 @@ public class OrderService : IOrderService
         var normalizedEmail = NormalizeEmail(dto.Email);
         var normalizedPn = NormalizePersonalNumber(dto.PersonalNumber);
 
-        // 1) If FE sends Id ? reuse
-        if (dto.Id.HasValue && dto.Id.Value != Guid.Empty)
-        {
-            var existingById = await _uow.OrderParties.Query()
-                .OfType<PersonParty>()
-                .FirstOrDefaultAsync(p => p.Id == dto.Id.Value);
-
-            if (existingById != null)
-            {
-                UpdatePersonParty(existingById, dto, normalizedEmail, normalizedPn);
-                return existingById;
-            }
-        }
-
-        // 2) Try match by PersonalNumber (best identity)
+        // 1) Try match by PersonalNumber (best identity)
         if (!string.IsNullOrWhiteSpace(normalizedPn))
         {
             var existingByPn = await _uow.OrderParties.Query()
@@ -327,7 +321,7 @@ public class OrderService : IOrderService
             }
         }
 
-        // 3) Fallback: match by Email
+        // 2) Fallback: match by Email
         if (!string.IsNullOrWhiteSpace(normalizedEmail))
         {
             var existingByEmail = await _uow.OrderParties.Query()
@@ -341,7 +335,7 @@ public class OrderService : IOrderService
             }
         }
 
-        // 4) Create new
+        // 3) Create new
         var (first, last) = SplitFullName(dto.FullName);
 
         var party = new PersonParty
@@ -489,22 +483,7 @@ public class OrderService : IOrderService
 
     private async Task UpdatePartyAsync(Order order, PartyCreateDto dto)
     {
-        // If FE sends Party.Id -> link existing
-        if (dto.Id.HasValue && dto.Id.Value != Guid.Empty)
-        {
-            var id = dto.Id.Value;
-            var existing = await _uow.OrderParties.Query()
-                .OfType<PersonParty>()
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (existing == null)
-                throw new Exception("Party not found.");
-
-            order.OrderParty = existing;
-            return;
-        }
-
-        // Otherwise update current party (ensure it's PersonParty)
+        // Update current party (ensure it's PersonParty)
         if (order.OrderParty is not PersonParty person)
         {
             person = new PersonParty();
