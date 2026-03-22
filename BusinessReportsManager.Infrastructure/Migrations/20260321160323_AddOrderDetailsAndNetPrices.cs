@@ -18,20 +18,30 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                 oldClrType: typeof(decimal),
                 oldType: "numeric");
 
+            // text -> integer: PostgreSQL does not allow window functions in ALTER COLUMN ... USING.
+            // Drop unique index, replace column via temp + ROW_NUMBER in UPDATE, then recreate index.
             migrationBuilder.Sql(
-                @"ALTER TABLE ""Orders"" ALTER COLUMN ""OrderNumber"" DROP DEFAULT;
-                  ALTER TABLE ""Orders"" ALTER COLUMN ""OrderNumber"" TYPE integer USING (ROW_NUMBER() OVER (ORDER BY ""CreatedAtUtc""))::integer;");
+                """
+                DROP INDEX IF EXISTS "IX_Orders_OrderNumber";
 
-            migrationBuilder.Sql(
-                @"DO $$
-                  DECLARE r RECORD; seq int := 0;
-                  BEGIN
-                    FOR r IN SELECT ""Id"" FROM ""Orders"" ORDER BY ""CreatedAtUtc""
-                    LOOP
-                      seq := seq + 1;
-                      UPDATE ""Orders"" SET ""OrderNumber"" = seq WHERE ""Id"" = r.""Id"";
-                    END LOOP;
-                  END $$;");
+                ALTER TABLE "Orders" ADD COLUMN "OrderNumber_new" integer NULL;
+
+                UPDATE "Orders" o
+                SET "OrderNumber_new" = sub.rn
+                FROM (
+                    SELECT "Id", ROW_NUMBER() OVER (ORDER BY "CreatedAtUtc") AS rn
+                    FROM "Orders"
+                ) sub
+                WHERE o."Id" = sub."Id";
+
+                UPDATE "Orders" SET "OrderNumber_new" = 0 WHERE "OrderNumber_new" IS NULL;
+
+                ALTER TABLE "Orders" DROP COLUMN "OrderNumber";
+                ALTER TABLE "Orders" RENAME COLUMN "OrderNumber_new" TO "OrderNumber";
+                ALTER TABLE "Orders" ALTER COLUMN "OrderNumber" SET NOT NULL;
+
+                CREATE UNIQUE INDEX "IX_Orders_OrderNumber" ON "Orders" ("OrderNumber");
+                """);
 
             migrationBuilder.AddColumn<decimal>(
                 name: "HotelNet",
@@ -170,13 +180,14 @@ namespace BusinessReportsManager.Infrastructure.Migrations
                 oldClrType: typeof(decimal),
                 oldType: "numeric(18,2)");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "OrderNumber",
-                table: "Orders",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(int),
-                oldType: "integer");
+            migrationBuilder.Sql(
+                """
+                DROP INDEX IF EXISTS "IX_Orders_OrderNumber";
+
+                ALTER TABLE "Orders" ALTER COLUMN "OrderNumber" TYPE text USING ("OrderNumber"::text);
+
+                CREATE UNIQUE INDEX "IX_Orders_OrderNumber" ON "Orders" ("OrderNumber");
+                """);
         }
     }
 }
