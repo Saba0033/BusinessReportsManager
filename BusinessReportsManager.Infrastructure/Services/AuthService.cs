@@ -85,6 +85,6 @@ public class AuthService : IAuthService
         await _userManager.AddToRoleAsync(user, targetRole);
 
         // 5) Response
-        return new RegisterResponse(user.Id, user.UserName!, user.Email!);
+        return new RegisterResponse(user.Id, user.Email!, user.UserName!);
     }
 }

@@ -2,9 +2,11 @@ using BusinessReportsManager.Application.AbstractServices;
 using BusinessReportsManager.Application.DTOs;
 using BusinessReportsManager.Application.DTOs.Order;
 using BusinessReportsManager.Application.DTOs.Payment;
+using BusinessReportsManager.Api.SwaggerExamples;
 using BusinessReportsManager.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Filters;
 
 
 namespace BusinessReportsManager.API.Controllers;
@@ -45,6 +47,7 @@ public class OrderController : ControllerBase
     [Authorize(Roles = "Supervisor,Employee")]
     [ProducesResponseType(typeof(OrderDto), 201)]
     [ProducesResponseType(500)]
+    [SwaggerRequestExample(typeof(OrderCreateDto), typeof(OrderCreateDtoExample))]
     public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
     {
         try
@@ -75,6 +78,7 @@ public class OrderController : ControllerBase
     [HttpPut("{orderId:guid}")]
     [ProducesResponseType(typeof(OrderDto), 200)]
     [ProducesResponseType(404)]
+    [SwaggerRequestExample(typeof(OrderEditDto), typeof(OrderEditDtoExample))]
     public async Task<IActionResult> Edit(Guid orderId, [FromBody] OrderEditDto dto)
     {
         var result = await _orders.EditOrderAsync(orderId, dto);
@@ -262,6 +266,7 @@ public class OrderController : ControllerBase
     [Authorize(Roles = "Accountant,Supervisor")]
     [ProducesResponseType(204)]
     [ProducesResponseType(404)]
+    [SwaggerRequestExample(typeof(AccountingCommentUpdateDto), typeof(AccountingCommentUpdateDtoExample))]
     public async Task<IActionResult> UpdateAccountingComment(Guid orderId, [FromBody] AccountingCommentUpdateDto dto)
     {
         var ok = await _orders.UpdateAccountingCommentAsync(orderId, dto.Comment);
