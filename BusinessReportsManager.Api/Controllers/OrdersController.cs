@@ -36,7 +36,7 @@ public class OrderController : ControllerBase
     /// Creates a new order with party, tour, passengers, tickets, hotel bookings,
     /// net prices (ticket, hotel, transfer, insurance, other service) with their suppliers,
     /// tour type, order source, customer bank requisites, and accounting data.
-    /// Manager name is set from the authenticated user login (JWT name claim).
+    /// Manager name is set from the authenticated user login (JWT username claim).
     /// A sequential integer OrderNumber is assigned automatically.
     /// </summary>
     /// <param name="dto">Order creation payload including all nested objects.</param>
@@ -68,7 +68,7 @@ public class OrderController : ControllerBase
     /// <summary>
     /// Updates an existing order by fully replacing its nested structure,
     /// including passengers, tickets, hotel bookings, net prices, suppliers,
-    /// tour type, and order source. Manager name follows the current user (JWT name claim).
+    /// tour type, and order source. Manager name follows the current user (JWT username claim).
     /// </summary>
     /// <param name="orderId">The GUID of the order to update.</param>
     /// <param name="dto">The full replacement payload.</param>

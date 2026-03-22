@@ -292,7 +292,8 @@ public class OrderService : IOrderService
 
     private static string? ResolveManagerName(ClaimsPrincipal? user, string? dtoFallback)
     {
-        var fromJwt = user?.FindFirst(ClaimTypes.Name)?.Value;
+        var fromJwt = user?.FindFirst("username")?.Value
+            ?? user?.FindFirst(ClaimTypes.Name)?.Value;
         return string.IsNullOrWhiteSpace(fromJwt) ? dtoFallback : fromJwt;
     }
 

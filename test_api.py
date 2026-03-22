@@ -44,7 +44,7 @@ print("\n═══ 1. AUTHENTICATION ═══")
 
 # Login as supervisor (has all permissions)
 r = requests.post(f"{BASE}/api/auth/login", json={
-    "userName": "supervisor",
+    "username": "supervisor",
     "password": "P@ssword1"
 })
 check(r.status_code == 200, "Supervisor login OK", f"Supervisor login failed: {r.status_code} {r.text}")
@@ -54,7 +54,7 @@ headers = {"Authorization": f"Bearer {token}"}
 
 # Login as employee
 r = requests.post(f"{BASE}/api/auth/login", json={
-    "userName": "employee",
+    "username": "employee",
     "password": "P@ssword1"
 })
 check(r.status_code == 200, "Employee login OK", f"Employee login failed: {r.status_code}")
@@ -63,7 +63,7 @@ emp_headers = {"Authorization": f"Bearer {emp_token}"}
 
 # Login as accountant
 r = requests.post(f"{BASE}/api/auth/login", json={
-    "userName": "accountant",
+    "username": "accountant",
     "password": "P@ssword1"
 })
 check(r.status_code == 200, "Accountant login OK", f"Accountant login failed: {r.status_code}")
