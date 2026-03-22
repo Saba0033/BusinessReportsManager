@@ -24,11 +24,13 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var key = jwtSection["Key"] ?? "THIS_IS_A_DEMO_SECRET_CHANGE_ME";
         var expiresMinutes = int.TryParse(jwtSection["ExpiresMinutes"], out var m) ? m : 120;
 
+        var login = user.UserName ?? user.Email ?? "";
         var claims = new List<Claim>
     {
         new Claim(ClaimTypes.NameIdentifier, user.Id),
         new Claim(ClaimTypes.Email, user.Email ?? ""),
-        new Claim(ClaimTypes.Name, user.UserName ?? user.Email ?? "")
+        new Claim(ClaimTypes.Name, login),
+        new Claim("username", login)
     };
 
         foreach (var role in roles)

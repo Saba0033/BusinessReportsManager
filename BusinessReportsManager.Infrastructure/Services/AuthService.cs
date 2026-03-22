@@ -28,7 +28,7 @@ public class AuthService : IAuthService
     public async Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
     {
         // Login by USERNAME (not email)
-        var user = await _userManager.FindByNameAsync(request.UserName);
+        var user = await _userManager.FindByNameAsync(request.Username);
         if (user is null)
             throw new UnauthorizedAccessException("Invalid credentials");
 
@@ -44,7 +44,7 @@ public class AuthService : IAuthService
         var roles = await _userManager.GetRolesAsync(user);
         var (token, expires) = _jwt.GenerateToken(user, roles);
 
-        return new LoginResponse(token, expires);
+        return new LoginResponse(token, expires, user.UserName!);
     }
 
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest request, string role, CancellationToken ct = default)
@@ -55,7 +55,7 @@ public class AuthService : IAuthService
             throw new Exception("Email already exists.");
 
         // 2) Username unique
-        var existingByUserName = await _userManager.FindByNameAsync(request.UserName);
+        var existingByUserName = await _userManager.FindByNameAsync(request.Username);
         if (existingByUserName != null)
             throw new Exception("Username already exists.");
 
@@ -63,7 +63,7 @@ public class AuthService : IAuthService
         var user = new AppUser
         {
             Email = request.Email,
-            UserName = request.UserName,
+            UserName = request.Username,
 
             // Keep column, but stop using it in the app
             FullName = null
