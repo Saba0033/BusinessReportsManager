@@ -91,6 +91,7 @@ public class OrderController : ControllerBase
     /// ManagerName, TourName, TourType, StartDate, EndDate, GrossPrice,
     /// TicketNet/Supplier, HotelNet/Supplier, TransferNet/Supplier,
     /// InsuranceNet/Supplier, OtherServiceNet/Supplier, Profit, PaidByClient, LeftToPay, Currency.
+    /// Results are ordered by order ID (GUID).
     /// </summary>
     /// <returns>List of flat order report records.</returns>
     /// <response code="200">Returns the list of order reports.</response>
@@ -217,6 +218,7 @@ public class OrderController : ControllerBase
     /// Manager name, Tour name, Start/End dates, Gross price,
     /// Ticket/Hotel/Transfer/Insurance/OtherService NET and suppliers,
     /// Profit, Paid by client, Left to pay, Currency.
+    /// Rows are ordered by order ID (GUID).
     /// </summary>
     /// <returns>An Excel file download.</returns>
     /// <response code="200">Returns the Excel file.</response>
@@ -229,6 +231,27 @@ public class OrderController : ControllerBase
         return File(fileBytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"Report sample_{Guid.NewGuid()}.xlsx");
+    }
+
+    /// <summary>
+    /// Downloads orders created between two dates (inclusive on <c>CreatedAtUtc</c>) as an Excel (.xlsx) report.
+    /// Uses the same columns as the full export; rows are ordered by order ID (GUID).
+    /// </summary>
+    /// <param name="start">Range start (inclusive).</param>
+    /// <param name="end">Range end (inclusive).</param>
+    /// <returns>An Excel file download.</returns>
+    /// <response code="200">Returns the Excel file.</response>
+    [HttpGet("export-excel/date-range")]
+    [ProducesResponseType(200)]
+    public async Task<IActionResult> ExportExcelByDateRange([FromQuery] DateTime start, [FromQuery] DateTime end)
+    {
+        var reportData = await _orders.GetReportByDateRangeAsync(start, end);
+        var fileBytes = _orderExcel.GenerateReportExcel(reportData);
+        var safeStart = start.ToUniversalTime().ToString("yyyyMMdd");
+        var safeEnd = end.ToUniversalTime().ToString("yyyyMMdd");
+        return File(fileBytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"Orders_{safeStart}_{safeEnd}_{Guid.NewGuid().ToString("N")}.xlsx");
     }
 
     /// <summary>

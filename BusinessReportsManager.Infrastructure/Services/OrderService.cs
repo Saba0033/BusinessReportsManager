@@ -687,9 +687,10 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
 
     private List<OrderReportDto> MapToReportDtos(List<Order> orders)
     {
-        var result = new List<OrderReportDto>(orders.Count);
+        var sorted = orders.OrderBy(o => o.Id).ToList();
+        var result = new List<OrderReportDto>(sorted.Count);
 
-        foreach (var o in orders)
+        foreach (var o in sorted)
         {
             var totalPaid = o.Payments
                 .Where(p => p.PriceCurrency != null)
