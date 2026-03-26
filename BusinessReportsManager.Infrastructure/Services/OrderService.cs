@@ -687,7 +687,7 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
 
     private List<OrderReportDto> MapToReportDtos(List<Order> orders)
     {
-        var sorted = orders.OrderBy(o => o.Id).ToList();
+        var sorted = orders.OrderBy(o => o.OrderNumber).ToList();
         var result = new List<OrderReportDto>(sorted.Count);
 
         foreach (var o in sorted)
