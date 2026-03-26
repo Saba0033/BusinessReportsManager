@@ -91,7 +91,7 @@ public class OrderController : ControllerBase
     /// ManagerName, TourName, TourType, StartDate, EndDate, GrossPrice,
     /// TicketNet/Supplier, HotelNet/Supplier, TransferNet/Supplier,
     /// InsuranceNet/Supplier, OtherServiceNet/Supplier, Profit, PaidByClient, LeftToPay, Currency.
-    /// Results are ordered by order ID (GUID).
+    /// Results are ordered by order number (sequential integer).
     /// </summary>
     /// <returns>List of flat order report records.</returns>
     /// <response code="200">Returns the list of order reports.</response>
@@ -218,7 +218,7 @@ public class OrderController : ControllerBase
     /// Manager name, Tour name, Start/End dates, Gross price,
     /// Ticket/Hotel/Transfer/Insurance/OtherService NET and suppliers,
     /// Profit, Paid by client, Left to pay, Currency.
-    /// Rows are ordered by order ID (GUID).
+    /// Rows are ordered by order number (sequential integer).
     /// </summary>
     /// <returns>An Excel file download.</returns>
     /// <response code="200">Returns the Excel file.</response>
@@ -235,7 +235,7 @@ public class OrderController : ControllerBase
 
     /// <summary>
     /// Downloads orders created between two dates (inclusive on <c>CreatedAtUtc</c>) as an Excel (.xlsx) report.
-    /// Uses the same columns as the full export; rows are ordered by order ID (GUID).
+    /// Uses the same columns as the full export; rows are ordered by order number (sequential integer).
     /// </summary>
     /// <param name="start">Range start (inclusive).</param>
     /// <param name="end">Range end (inclusive).</param>
