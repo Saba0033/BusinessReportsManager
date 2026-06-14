@@ -18,6 +18,8 @@ public interface IOrderService
     Task<List<OrderDto>> GetByPartyAsync(Guid partyId);
     Task<List<OrderDto>> GetByDateRangeAsync(DateTime start, DateTime end);
     Task<List<SavedCustomerDto>> GetSavedCustomersAsync();
+    Task<List<SavedCustomerDto>> SearchCustomersAsync(string? query, int take = 10);
+    Task<List<string>> SearchSuppliersAsync(string? query, int take = 10);
     Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startDate, DateOnly? endDate);
     Task<bool> UpdateAccountingCommentAsync(Guid orderId, string? comment);
 

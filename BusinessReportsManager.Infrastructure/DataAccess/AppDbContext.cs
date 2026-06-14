@@ -21,7 +21,6 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<Passenger> Passengers => Set<Passenger>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PriceCurrency> PriceCurrencies => Set<PriceCurrency>();
-    public DbSet<CustomerBankRequisites> CustomerBankRequisites { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,12 +72,6 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .HasForeignKey(p => p.TourId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        modelBuilder.Entity<Order>()
-           .HasOne(o => o.CustomerBankRequisites)
-           .WithMany()
-           .HasForeignKey(o => o.CustomerBankRequisitesId)
-           .OnDelete(DeleteBehavior.SetNull);
-
         // ---- Supplier–Tour relationship ----
         modelBuilder.Entity<Tour>()
             .HasOne(t => t.TourSupplier)
@@ -131,8 +124,15 @@ public class AppDbContext : IdentityDbContext<AppUser>
             b.Property(o => o.TicketNet).HasColumnType("numeric(18,2)");
             b.Property(o => o.HotelNet).HasColumnType("numeric(18,2)");
             b.Property(o => o.TransferNet).HasColumnType("numeric(18,2)");
+            b.Property(o => o.CruiseNet).HasColumnType("numeric(18,2)");
             b.Property(o => o.InsuranceNet).HasColumnType("numeric(18,2)");
             b.Property(o => o.OtherServiceNet).HasColumnType("numeric(18,2)");
+
+            b.Property(o => o.TicketNetRate).HasColumnType("numeric(18,6)");
+            b.Property(o => o.HotelNetRate).HasColumnType("numeric(18,6)");
+            b.Property(o => o.TransferNetRate).HasColumnType("numeric(18,6)");
+            b.Property(o => o.CruiseNetRate).HasColumnType("numeric(18,6)");
+            b.Property(o => o.OtherServiceNetRate).HasColumnType("numeric(18,6)");
 
             // Order ↔ Payments
             b.HasMany(o => o.Payments)

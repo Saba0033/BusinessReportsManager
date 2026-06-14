@@ -21,11 +21,14 @@ public class OrderReportDto
     public string? HotelSupplier { get; set; }
     public decimal TransferNet { get; set; }
     public string? TransferSupplier { get; set; }
+    public decimal CruiseNet { get; set; }
+    public string? CruiseSupplier { get; set; }
     public decimal InsuranceNet { get; set; }
     public string? InsuranceSupplier { get; set; }
     public decimal OtherServiceNet { get; set; }
     public string? OtherServiceSupplier { get; set; }
 
+    public decimal TotalExpenses { get; set; }
     public decimal Profit { get; set; }
     public decimal PaidByClient { get; set; }
     public decimal LeftToPay { get; set; }

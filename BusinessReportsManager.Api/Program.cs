@@ -115,10 +115,11 @@ builder.Services.AddSwaggerGen(c =>
     var securityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Type = SecuritySchemeType.ApiKey,
+        Type = SecuritySchemeType.Http,
         In = ParameterLocation.Header,
-        Scheme = "Bearer",
-        Description = "Enter - Bearer {token}"
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Paste ONLY the JWT token here (Swagger adds the 'Bearer ' prefix automatically)."
     };
 
     c.AddSecurityDefinition("Bearer", securityScheme);
@@ -157,6 +158,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderExcelService, OrderExcelService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddHttpClient<IExchangeRateService, NbgExchangeRateService>();
 builder.Services.AddAutoMapper(typeof(AppProfile));
 
 builder.Services.AddScoped<IUserService, UserService>();

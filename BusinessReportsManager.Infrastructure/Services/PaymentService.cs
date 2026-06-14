@@ -71,6 +71,14 @@ public class PaymentService : IPaymentService
     }
 
     // -----------------------------------------
+    // HAS ANY PAYMENT
+    // -----------------------------------------
+    public async Task<bool> HasAnyPaymentAsync(Guid orderId)
+    {
+        return await _uow.Payments.Query(p => p.OrderId == orderId).AnyAsync();
+    }
+
+    // -----------------------------------------
     // CUSTOMER PAID TOTAL
     // -----------------------------------------
     public async Task<decimal> GetTotalPaidAsync(Guid orderId)

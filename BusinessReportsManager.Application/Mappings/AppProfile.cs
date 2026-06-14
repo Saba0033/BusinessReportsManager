@@ -164,7 +164,7 @@ public class AppProfile : Profile
             .ForMember(d => d.AccountingCommentUpdatedAtUtc, o => o.MapFrom(s => s.AccountingCommentUpdatedAtUtc))
             .ForMember(d => d.AccountingCommentUpdatedById, o => o.MapFrom(s => s.AccountingCommentUpdatedById))
             .ForMember(d => d.AccountingCommentUpdatedByEmail, o => o.MapFrom(s => s.AccountingCommentUpdatedByEmail))
-            .ForMember(d => d.TotalExpenseInGel, o => o.MapFrom(s => s.TotalExpenseInGel))
+            .ForMember(d => d.TotalExpenseInGel, o => o.MapFrom(s => s.ComputedTotalExpenseInGel))
             .ForMember(d => d.TourType, o => o.MapFrom(s => s.TourType))
             .ForMember(d => d.TicketNet, o => o.MapFrom(s => s.TicketNet))
             .ForMember(d => d.TicketSupplier, o => o.MapFrom(s => s.TicketSupplier))
@@ -185,11 +185,6 @@ public class AppProfile : Profile
                 (s.Payments ?? new List<Payment>())
                     .Where(p => p.PriceCurrency != null)
                     .Sum(p => p.PriceCurrency!.Amount * (p.PriceCurrency.ExchangeRateToGel ?? 1))))
-            .ForMember(d => d.Profit, o => o.MapFrom(s => s.SellPriceInGel - s.TotalExpenseInGel));
-
-        CreateMap<CustomerBankRequisites, CustomerBankRequisitesDto>();
-        CreateMap<CustomerBankRequisitesCreateDto, CustomerBankRequisites>();
-
-
+            .ForMember(d => d.Profit, o => o.MapFrom(s => s.SellPriceInGel - s.ComputedTotalExpenseInGel));
     }
 }

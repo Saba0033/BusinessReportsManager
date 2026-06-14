@@ -34,8 +34,8 @@ public class OrderController : ControllerBase
 
     /// <summary>
     /// Creates a new order with party, tour, passengers, tickets, hotel bookings,
-    /// net prices (ticket, hotel, transfer, insurance, other service) with their suppliers,
-    /// tour type, order source, customer bank requisites, and accounting data.
+    /// net prices (ticket, hotel, transfer, cruise, insurance, other service) with their
+    /// currencies, exchange rates and suppliers, tour type, order source, and accounting data.
     /// Manager name is set from the authenticated user login (JWT username claim).
     /// A sequential integer OrderNumber is assigned automatically.
     /// </summary>
@@ -76,11 +76,19 @@ public class OrderController : ControllerBase
     /// <response code="200">Order updated successfully.</response>
     /// <response code="404">Order not found.</response>
     [HttpPut("{orderId:guid}")]
+    [Authorize(Roles = "Supervisor,Accountant,Employee")]
     [ProducesResponseType(typeof(OrderDto), 200)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     [SwaggerRequestExample(typeof(OrderEditDto), typeof(OrderEditDtoExample))]
     public async Task<IActionResult> Edit(Guid orderId, [FromBody] OrderEditDto dto)
     {
+        // Once a payment is recorded on an order, Sales (Employee) can no longer
+        // open it for editing. Accountant/Supervisor can always edit.
+        var isPrivileged = User.IsInRole("Supervisor") || User.IsInRole("Accountant");
+        if (!isPrivileged && await _payments.HasAnyPaymentAsync(orderId))
+            return Forbid();
+
         var result = await _orders.EditOrderAsync(orderId, dto);
         return result is null ? NotFound() : Ok(result);
     }
@@ -278,6 +286,30 @@ public class OrderController : ControllerBase
     }
 
     /// <summary>
+    /// Downloads a customer-facing invoice (.xlsx) for a single order.
+    /// Shows gross price, payments received and the outstanding balance.
+    /// Internal NET costs, suppliers and profit are not included.
+    /// </summary>
+    /// <param name="orderId">The GUID of the order to invoice.</param>
+    /// <returns>An Excel invoice file.</returns>
+    /// <response code="200">Returns the invoice file.</response>
+    /// <response code="404">Order not found.</response>
+    [HttpGet("{orderId:guid}/invoice")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ExportInvoice(Guid orderId)
+    {
+        var order = await _orders.GetByIdAsync(orderId);
+        if (order is null)
+            return NotFound();
+
+        var fileBytes = _orderExcel.GenerateInvoiceExcel(order);
+        return File(fileBytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"Invoice_INV-{order.OrderNumber:D5}_{Guid.NewGuid():N}.xlsx");
+    }
+
+    /// <summary>
     /// Updates the accountant's comment on an order. Only Accountant and Supervisor roles can use this.
     /// The comment, timestamp, and updating user info are stored.
     /// </summary>
@@ -308,5 +340,34 @@ public class OrderController : ControllerBase
     public async Task<IActionResult> GetSavedCustomers()
     {
         return Ok(await _orders.GetSavedCustomersAsync());
+    }
+
+    /// <summary>
+    /// Autocomplete for customers used on previous orders. Matches the typed text
+    /// against first name, last name or personal number (case-insensitive).
+    /// Returns enough detail (email, phone, personal number) to auto-fill the form.
+    /// </summary>
+    /// <param name="query">Partial name or personal number.</param>
+    /// <param name="take">Max results (default 10, capped at 50).</param>
+    [HttpGet("customers/search")]
+    [Authorize(Roles = "Supervisor,Employee,Accountant")]
+    [ProducesResponseType(typeof(List<SavedCustomerDto>), 200)]
+    public async Task<IActionResult> SearchCustomers([FromQuery] string? query, [FromQuery] int take = 10)
+    {
+        return Ok(await _orders.SearchCustomersAsync(query, take));
+    }
+
+    /// <summary>
+    /// Autocomplete for supplier names used on previous orders
+    /// (tour suppliers and per-service NET suppliers), case-insensitive.
+    /// </summary>
+    /// <param name="query">Partial supplier name.</param>
+    /// <param name="take">Max results (default 10, capped at 50).</param>
+    [HttpGet("suppliers/search")]
+    [Authorize(Roles = "Supervisor,Employee,Accountant")]
+    [ProducesResponseType(typeof(List<string>), 200)]
+    public async Task<IActionResult> SearchSuppliers([FromQuery] string? query, [FromQuery] int take = 10)
+    {
+        return Ok(await _orders.SearchSuppliersAsync(query, take));
     }
 }

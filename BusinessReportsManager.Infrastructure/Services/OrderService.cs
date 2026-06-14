@@ -18,13 +18,15 @@ public class OrderService : IOrderService
     private readonly IUnitOfWork _uow;
     private readonly IMapper _mapper;
     private readonly IHttpContextAccessor _contextAccessor;
+    private readonly IExchangeRateService _fx;
 
 
-    public OrderService(IUnitOfWork uow, IMapper mapper, IHttpContextAccessor contextAccessor)
+    public OrderService(IUnitOfWork uow, IMapper mapper, IHttpContextAccessor contextAccessor, IExchangeRateService fx)
     {
         _uow = uow;
         _mapper = mapper;
         _contextAccessor = contextAccessor;
+        _fx = fx;
     }
 
     // ---------------------------------------------------
@@ -39,14 +41,6 @@ public class OrderService : IOrderService
 
         if (userId == null || email == null)
             throw new Exception("Unable to read user identity from JWT.");
-
-        CustomerBankRequisites? req = null;
-
-        if (dto.CustomerBankRequisites != null)
-        {
-            req = _mapper.Map<CustomerBankRequisites>(dto.CustomerBankRequisites);
-            await _uow.CustomerBankRequisites.AddAsync(req);
-        }
 
         // 1) PARTY
         var party = await GetOrCreatePersonPartyAsync(dto.Party);
@@ -64,24 +58,14 @@ public class OrderService : IOrderService
             TourType = dto.TourType,
             ManagerName = ResolveManagerName(user, dto.ManagerName),
             SellPriceInGel = dto.SellPriceInGel,
-            TotalExpenseInGel = dto.TotalExpenseInGel,
-            TicketNet = dto.TicketNet,
-            TicketSupplier = dto.TicketSupplier,
-            HotelNet = dto.HotelNet,
-            HotelSupplier = dto.HotelSupplier,
-            TransferNet = dto.TransferNet,
-            TransferSupplier = dto.TransferSupplier,
-            InsuranceNet = dto.InsuranceNet,
-            InsuranceSupplier = dto.InsuranceSupplier,
-            OtherServiceNet = dto.OtherServiceNet,
-            OtherServiceSupplier = dto.OtherServiceSupplier,
             Status = OrderStatus.Open,
             OrderPartyId = party.Id,
             Tour = tour,
             CreatedById = Guid.Parse(userId),
-            CreatedByEmail = email,
-            CustomerBankRequisites = req
+            CreatedByEmail = email
         };
+
+        await ApplyServiceNetsAsync(order, dto);
 
         await _uow.Orders.AddAsync(order);
         await _uow.SaveChangesAsync();
@@ -100,7 +84,10 @@ public class OrderService : IOrderService
     // ---------------------------------------------------
     public async Task<OrderDto?> EditOrderAsync(Guid orderId, OrderEditDto dto)
     {
-        var order = await LoadOrderGraphAsync(orderId);
+        // Load the graph TRACKED so EF change-detection handles the nested
+        // add/update/delete automatically. (Loading no-tracking and then calling
+        // Update on the whole graph caused DbUpdateConcurrencyException.)
+        var order = await LoadOrderGraphAsync(orderId, asNoTracking: false);
         if (order == null) return null;
 
         var user = _contextAccessor.HttpContext?.User;
@@ -110,17 +97,7 @@ public class OrderService : IOrderService
         order.TourType = dto.TourType;
         order.ManagerName = ResolveManagerName(user, dto.ManagerName);
         order.SellPriceInGel = dto.SellPriceInGel;
-        order.TotalExpenseInGel = dto.TotalExpenseInGel;
-        order.TicketNet = dto.TicketNet;
-        order.TicketSupplier = dto.TicketSupplier;
-        order.HotelNet = dto.HotelNet;
-        order.HotelSupplier = dto.HotelSupplier;
-        order.TransferNet = dto.TransferNet;
-        order.TransferSupplier = dto.TransferSupplier;
-        order.InsuranceNet = dto.InsuranceNet;
-        order.InsuranceSupplier = dto.InsuranceSupplier;
-        order.OtherServiceNet = dto.OtherServiceNet;
-        order.OtherServiceSupplier = dto.OtherServiceSupplier;
+        await ApplyServiceNetsAsync(order, dto);
 
         // 2) PARTY (person-only)
         await UpdatePartyAsync(order, dto.Party);
@@ -139,7 +116,8 @@ public class OrderService : IOrderService
         // ExtraServices NOT edited here anymore (separate endpoint later)
         // Payments NOT edited here anymore (separate endpoint later)
 
-        await _uow.Orders.UpdateAsync(order);
+        // No explicit Update call: the graph is tracked, so SaveChanges persists
+        // scalar edits, added children and removed children correctly.
         await _uow.SaveChangesAsync();
 
         return _mapper.Map<OrderDto>(order);
@@ -181,9 +159,7 @@ public class OrderService : IOrderService
     public async Task<List<OrderDto>> GetAllAsync()
     {
         var orders = await _uow.Orders.Query()
-            .Include(o => o.OrderParty)
-            .Include(o => o.CustomerBankRequisites)
-            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.OrderParty)            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -197,9 +173,7 @@ public class OrderService : IOrderService
     public async Task<OrderDto?> GetByIdAsync(Guid id)
     {
         var order = await _uow.Orders.Query()
-            .Include(o => o.OrderParty)
-            .Include(o => o.CustomerBankRequisites)
-            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.OrderParty)            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -213,9 +187,7 @@ public class OrderService : IOrderService
     public async Task<List<OrderDto>> GetByStatusAsync(OrderStatus status)
     {
         var orders = await _uow.Orders.Query(o => o.Status == status)
-            .Include(o => o.OrderParty)
-            .Include(o => o.CustomerBankRequisites)
-            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.OrderParty)            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -229,9 +201,7 @@ public class OrderService : IOrderService
     public async Task<List<OrderDto>> GetByPartyAsync(Guid partyId)
     {
         var orders = await _uow.Orders.Query(o => o.OrderPartyId == partyId)
-            .Include(o => o.OrderParty)
-            .Include(o => o.CustomerBankRequisites)
-            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.OrderParty)            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -244,11 +214,10 @@ public class OrderService : IOrderService
 
     public async Task<List<OrderDto>> GetByDateRangeAsync(DateTime start, DateTime end)
     {
+        var (s, e) = NormalizeUtcRange(start, end);
         var orders = await _uow.Orders.Query(o =>
-                o.CreatedAtUtc >= start && o.CreatedAtUtc <= end)
-            .Include(o => o.OrderParty)
-            .Include(o => o.CustomerBankRequisites)
-            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+                o.CreatedAtUtc >= s && o.CreatedAtUtc <= e)
+            .Include(o => o.OrderParty)            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -307,11 +276,12 @@ public class OrderService : IOrderService
 
         var normalizedEmail = NormalizeEmail(dto.Email);
         var normalizedPn = NormalizePersonalNumber(dto.PersonalNumber);
+        var (first, last) = SplitFullName(dto.FullName);
 
-        // 0) Best match: explicit existing party Id from saved customers
+        // 0) Best match: explicit existing party Id from saved customers (optional)
         if (dto.Id.HasValue && dto.Id.Value != Guid.Empty)
         {
-            var existingById = await _uow.OrderParties.Query()
+            var existingById = await _uow.OrderParties.Query(asNoTracking: false)
                 .OfType<PersonParty>()
                 .FirstOrDefaultAsync(p => p.Id == dto.Id.Value);
 
@@ -322,10 +292,10 @@ public class OrderService : IOrderService
             }
         }
 
-        // 1) Try match by PersonalNumber
+        // 1) Match by PersonalNumber when provided (optional)
         if (!string.IsNullOrWhiteSpace(normalizedPn))
         {
-            var existingByPn = await _uow.OrderParties.Query()
+            var existingByPn = await _uow.OrderParties.Query(asNoTracking: false)
                 .OfType<PersonParty>()
                 .FirstOrDefaultAsync(p => p.PersonalNumber == normalizedPn);
 
@@ -336,10 +306,10 @@ public class OrderService : IOrderService
             }
         }
 
-        // 2) Fallback: match by Email
+        // 2) Match by Email when provided
         if (!string.IsNullOrWhiteSpace(normalizedEmail))
         {
-            var existingByEmail = await _uow.OrderParties.Query()
+            var existingByEmail = await _uow.OrderParties.Query(asNoTracking: false)
                 .OfType<PersonParty>()
                 .FirstOrDefaultAsync(p => p.Email == normalizedEmail);
 
@@ -350,9 +320,15 @@ public class OrderService : IOrderService
             }
         }
 
-        // 3) Create new
-        var (first, last) = SplitFullName(dto.FullName);
+        // 3) Fallback: case-insensitive name match
+        var existingByName = await FindPersonPartyByNameAsync(first, last);
+        if (existingByName != null)
+        {
+            UpdatePersonParty(existingByName, dto, normalizedEmail, normalizedPn);
+            return existingByName;
+        }
 
+        // 4) Create new — PersonalNumber and party Id are not required
         var party = new PersonParty
         {
             FirstName = first,
@@ -366,15 +342,32 @@ public class OrderService : IOrderService
         return party;
     }
 
+    private async Task<PersonParty?> FindPersonPartyByNameAsync(string firstName, string lastName)
+    {
+        if (string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName))
+            return null;
+
+        var first = firstName.Trim().ToLower();
+        var last = lastName.Trim().ToLower();
+
+        return await _uow.OrderParties.Query(asNoTracking: false)
+            .OfType<PersonParty>()
+            .Where(p =>
+                p.FirstName.ToLower() == first &&
+                (string.IsNullOrWhiteSpace(last)
+                    ? p.LastName == null || p.LastName == string.Empty
+                    : p.LastName.ToLower() == last))
+            .FirstOrDefaultAsync();
+    }
+
     private void UpdatePersonParty(PersonParty party, PartyCreateDto dto, string? normalizedEmail, string? normalizedPn)
     {
-        var (first, last) = SplitFullName(dto.FullName);
-
-        if (!string.IsNullOrWhiteSpace(first))
+        if (!string.IsNullOrWhiteSpace(dto.FullName))
+        {
+            var (first, last) = SplitFullName(dto.FullName);
             party.FirstName = first;
-
-        if (!string.IsNullOrWhiteSpace(last))
             party.LastName = last;
+        }
 
         if (!string.IsNullOrWhiteSpace(normalizedEmail))
             party.Email = normalizedEmail;
@@ -408,29 +401,52 @@ public class OrderService : IOrderService
 
 
 
-    private static void ApplyFullName(PersonParty party, string fullName)
+    private static string FormatClientDisplayName(PersonParty person)
     {
-        fullName = (fullName ?? "").Trim();
-        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var name = $"{person.FirstName} {person.LastName}".Trim();
+        var pn = person.PersonalNumber?.Trim();
 
-        if (parts.Length == 0)
-        {
-            party.FirstName = "";
-            party.LastName = "";
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(name))
+            return pn ?? string.Empty;
 
-        if (parts.Length == 1)
-        {
-            party.FirstName = parts[0];
-            party.LastName = "";
-            return;
-        }
-
-        party.FirstName = string.Join(" ", parts[..^1]);
-        party.LastName = parts[^1];
+        return string.IsNullOrWhiteSpace(pn) ? name : $"{name} ({pn})";
     }
 
+    private async Task ApplyServiceNetsAsync(Order order, OrderCreateDto dto)
+    {
+        var date = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        order.TicketNet = dto.TicketNet;
+        order.TicketNetCurrency = dto.TicketNetCurrency;
+        order.TicketNetRate = await _fx.ResolveRateToGelAsync(dto.TicketNetCurrency, dto.TicketNetRate, date);
+        order.TicketSupplier = dto.TicketSupplier;
+
+        order.HotelNet = dto.HotelNet;
+        order.HotelNetCurrency = dto.HotelNetCurrency;
+        order.HotelNetRate = await _fx.ResolveRateToGelAsync(dto.HotelNetCurrency, dto.HotelNetRate, date);
+        order.HotelSupplier = dto.HotelSupplier;
+
+        order.TransferNet = dto.TransferNet;
+        order.TransferNetCurrency = dto.TransferNetCurrency;
+        order.TransferNetRate = await _fx.ResolveRateToGelAsync(dto.TransferNetCurrency, dto.TransferNetRate, date);
+        order.TransferSupplier = dto.TransferSupplier;
+
+        order.CruiseNet = dto.CruiseNet;
+        order.CruiseNetCurrency = dto.CruiseNetCurrency;
+        order.CruiseNetRate = await _fx.ResolveRateToGelAsync(dto.CruiseNetCurrency, dto.CruiseNetRate, date);
+        order.CruiseSupplier = dto.CruiseSupplier;
+
+        // Insurance is GEL-only by business rule.
+        order.InsuranceNet = dto.InsuranceNet;
+        order.InsuranceSupplier = dto.InsuranceSupplier;
+
+        order.OtherServiceNet = dto.OtherServiceNet;
+        order.OtherServiceNetCurrency = dto.OtherServiceNetCurrency;
+        order.OtherServiceNetRate = await _fx.ResolveRateToGelAsync(dto.OtherServiceNetCurrency, dto.OtherServiceNetRate, date);
+        order.OtherServiceSupplier = dto.OtherServiceSupplier;
+
+        order.TotalExpenseInGel = order.ComputedTotalExpenseInGel;
+    }
 
     private async Task<Tour> CreateTourGraphAsync(OrderCreateDto dto)
     {
@@ -488,12 +504,10 @@ public class OrderService : IOrderService
     }
 
 
-    private async Task<Order?> LoadOrderGraphAsync(Guid orderId)
+    private async Task<Order?> LoadOrderGraphAsync(Guid orderId, bool asNoTracking = true)
     {
-        return await _uow.Orders.Query()
-            .Include(o => o.OrderParty)
-            .Include(o => o.CustomerBankRequisites)
-            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+        return await _uow.Orders.Query(asNoTracking: asNoTracking)
+            .Include(o => o.OrderParty)            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -504,7 +518,6 @@ public class OrderService : IOrderService
 
     private async Task UpdatePartyAsync(Order order, PartyCreateDto dto)
     {
-        // Update current party (ensure it's PersonParty)
         if (order.OrderParty is not PersonParty person)
         {
             person = new PersonParty();
@@ -512,9 +525,9 @@ public class OrderService : IOrderService
             order.OrderParty = person;
         }
 
-        ApplyFullName(person, dto.FullName);
-        person.Email = dto.Email;
-        person.Phone = dto.Phone;
+        var normalizedEmail = NormalizeEmail(dto.Email);
+        var normalizedPn = NormalizePersonalNumber(dto.PersonalNumber);
+        UpdatePersonParty(person, dto, normalizedEmail, normalizedPn);
     }
 
 
@@ -594,7 +607,7 @@ public class OrderService : IOrderService
                 (partyId, p) => new SavedCustomerDto
                 {
                     Id = p.Id,
-                    FullName = (p.FirstName + " " + p.LastName).Trim()
+                    FullName = FormatClientDisplayName(p)
                 }
             )
             .ToListAsync();
@@ -602,12 +615,85 @@ public class OrderService : IOrderService
         return customers;
     }
 
+    // Autocomplete over previously used customers (by first/last name or personal number).
+    public async Task<List<SavedCustomerDto>> SearchCustomersAsync(string? query, int take = 10)
+    {
+        if (take <= 0) take = 10;
+        if (take > 50) take = 50;
+
+        var q = _uow.OrderParties.Query().OfType<PersonParty>();
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var term = query.Trim().ToLower();
+            q = q.Where(p =>
+                p.FirstName.ToLower().Contains(term) ||
+                p.LastName.ToLower().Contains(term) ||
+                (p.PersonalNumber != null && p.PersonalNumber.ToLower().Contains(term)));
+        }
+
+        return await q
+            .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
+            .Take(take)
+            .Select(p => new SavedCustomerDto
+            {
+                Id = p.Id,
+                FullName = (p.FirstName + " " + p.LastName).Trim(),
+                Email = p.Email,
+                Phone = p.Phone,
+                PersonalNumber = p.PersonalNumber
+            })
+            .ToListAsync();
+    }
+
+    // Autocomplete over previously used supplier names (tour suppliers + per-service NET suppliers).
+    public async Task<List<string>> SearchSuppliersAsync(string? query, int take = 10)
+    {
+        if (take <= 0) take = 10;
+        if (take > 50) take = 50;
+
+        var term = query?.Trim();
+
+        var fromSuppliers = await _uow.Suppliers.Query()
+            .Select(s => s.Name)
+            .ToListAsync();
+
+        var fromOrders = await _uow.Orders.Query()
+            .Select(o => new
+            {
+                o.TicketSupplier,
+                o.HotelSupplier,
+                o.TransferSupplier,
+                o.CruiseSupplier,
+                o.InsuranceSupplier,
+                o.OtherServiceSupplier
+            })
+            .ToListAsync();
+
+        var all = fromSuppliers
+            .Concat(fromOrders.SelectMany(o => new[]
+            {
+                o.TicketSupplier, o.HotelSupplier, o.TransferSupplier,
+                o.CruiseSupplier, o.InsuranceSupplier, o.OtherServiceSupplier
+            }))
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!.Trim());
+
+        if (!string.IsNullOrWhiteSpace(term))
+            all = all.Where(n => n.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+        return all
+            .GroupBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .Take(take)
+            .ToList();
+    }
+
 public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startDate, DateOnly? endDate)
 {
     var q = _uow.Orders.Query()
-        .Include(o => o.OrderParty)
-        .Include(o => o.CustomerBankRequisites)
-        .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+        .Include(o => o.OrderParty)        .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.Passengers)
         .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
         .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -669,10 +755,21 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
 
     public async Task<List<OrderReportDto>> GetReportByDateRangeAsync(DateTime start, DateTime end)
     {
+        var (s, e) = NormalizeUtcRange(start, end);
         var orders = await LoadOrdersWithFullGraph()
-            .Where(o => o.CreatedAtUtc >= start && o.CreatedAtUtc <= end)
+            .Where(o => o.CreatedAtUtc >= s && o.CreatedAtUtc <= e)
             .ToListAsync();
         return MapToReportDtos(orders);
+    }
+
+    // Treats a date-only "end" as inclusive (end of that day) and ensures both
+    // bounds are UTC, as required by Npgsql for timestamptz comparisons.
+    private static (DateTime start, DateTime end) NormalizeUtcRange(DateTime start, DateTime end)
+    {
+        var s = start.Kind == DateTimeKind.Utc ? start : DateTime.SpecifyKind(start, DateTimeKind.Utc);
+        var e = end.TimeOfDay == TimeSpan.Zero ? end.Date.AddDays(1).AddTicks(-1) : end;
+        e = e.Kind == DateTimeKind.Utc ? e : DateTime.SpecifyKind(e, DateTimeKind.Utc);
+        return (s, e);
     }
 
     public async Task<List<OrderReportDto>> SearchReportAsync(string? tourName, DateOnly? startDate, DateOnly? endDate)
@@ -695,9 +792,7 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
     private IQueryable<Order> LoadOrdersWithFullGraph()
     {
         return _uow.Orders.Query()
-            .Include(o => o.OrderParty)
-            .Include(o => o.CustomerBankRequisites)
-            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
+            .Include(o => o.OrderParty)            .Include(o => o.Payments).ThenInclude(p => p.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.Passengers)
             .Include(o => o.Tour).ThenInclude(t => t.AirTickets).ThenInclude(a => a.PriceCurrency)
             .Include(o => o.Tour).ThenInclude(t => t.HotelBookings).ThenInclude(h => h.PriceCurrency)
@@ -722,7 +817,7 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
 
             var clientName = string.Empty;
             if (o.OrderParty is PersonParty person)
-                clientName = $"{person.FirstName} {person.LastName}".Trim();
+                clientName = FormatClientDisplayName(person);
 
             result.Add(new OrderReportDto
             {
@@ -738,17 +833,20 @@ public async Task<List<OrderDto>> SearchAsync(string? tourName, DateOnly? startD
                 StartDate = o.Tour?.StartDate ?? default,
                 EndDate = o.Tour?.EndDate ?? default,
                 GrossPrice = o.SellPriceInGel,
-                TicketNet = o.TicketNet,
+                TicketNet = o.TicketNetInGel,
                 TicketSupplier = o.TicketSupplier,
-                HotelNet = o.HotelNet,
+                HotelNet = o.HotelNetInGel,
                 HotelSupplier = o.HotelSupplier,
-                TransferNet = o.TransferNet,
+                TransferNet = o.TransferNetInGel,
                 TransferSupplier = o.TransferSupplier,
-                InsuranceNet = o.InsuranceNet,
+                CruiseNet = o.CruiseNetInGel,
+                CruiseSupplier = o.CruiseSupplier,
+                InsuranceNet = o.InsuranceNetInGel,
                 InsuranceSupplier = o.InsuranceSupplier,
-                OtherServiceNet = o.OtherServiceNet,
+                OtherServiceNet = o.OtherServiceNetInGel,
                 OtherServiceSupplier = o.OtherServiceSupplier,
-                Profit = o.SellPriceInGel - o.TotalExpenseInGel,
+                TotalExpenses = o.ComputedTotalExpenseInGel,
+                Profit = o.SellPriceInGel - o.ComputedTotalExpenseInGel,
                 PaidByClient = totalPaid,
                 LeftToPay = o.SellPriceInGel - totalPaid,
                 Currency = "GEL"

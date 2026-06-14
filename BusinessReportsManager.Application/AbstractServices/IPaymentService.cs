@@ -8,6 +8,8 @@ public interface IPaymentService
     Task<PaymentDto?> AddPaymentAsync(Guid orderId, PaymentCreateDto dto);
     Task<bool> RemovePaymentAsync(Guid paymentId);
 
+    Task<bool> HasAnyPaymentAsync(Guid orderId);
+
     Task<decimal> GetTotalPaidAsync(Guid orderId);
 
     Task<decimal> GetExpensesAsync(Guid orderId);
